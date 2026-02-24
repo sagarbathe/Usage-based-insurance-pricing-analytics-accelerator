@@ -194,11 +194,30 @@ notebook:
   parameters: target loss ratio (65%), expense load (15%), profit load
   (5%), max change cap (±15%), and smoothing (α = 0.3).
 
-### Step 7 — Create Power BI Reports
+### Step 7 — Publish Power BI Reports
 
-Build Power BI reports over the Gold tables for each persona (see
-[Persona Pages](#persona-pages)). Publish them to a Power BI workspace
-and note the `report_id` and `group_id` (workspace ID) for each.
+Pre-built Power BI report files are included in the **`reports/`** folder:
+
+| File | Persona |
+|------|--------|
+| `Pricing Adequacy Dashboard.pbix` | Pricing / Actuarial |
+
+To publish them to your Fabric workspace:
+
+1. Open each `.pbix` file in **Power BI Desktop**.
+2. Update the data source connection to point to your Fabric Lakehouse
+   Gold tables (Home → Transform data → Data source settings).
+3. Click **Publish** → select your Fabric workspace.
+4. After publishing, open the report in the Power BI service and note
+   the **Report ID** (from the URL: `reportId=<GUID>`) and the
+   **Workspace ID** / Group ID (from `groupId=<GUID>` or workspace
+   settings).
+5. Enter these values in `config.py` under `POWERBI_REPORTS` for the
+   corresponding persona.
+
+> **Tip:** If you build additional reports for other personas
+> (Underwriting, Agent/Advisor, Portfolio, Executive), save the `.pbix`
+> files into the `reports/` folder and follow the same publish workflow.
 
 ### Step 8 — Create Fabric Data Agents
 
@@ -312,7 +331,17 @@ sidebar to view the corresponding Power BI report and Data Agent.
 │   ├── portfolio.py           # Portfolio Manager
 │   └── executive.py           # Executive / Strategy
 │
+├── reports/                   # Power BI report files (.pbix)
+│   └── Pricing Adequacy Dashboard.pbix   # Pricing / Actuarial report
+│
 └── data/                      # Fabric notebooks & Gold table schemas
+    ├── csv/                                                # Source CSV data files
+    │   ├── accident.csv
+    │   ├── adjuster.csv
+    │   ├── claim.csv
+    │   ├── policy.csv
+    │   ├── policyholder.csv
+    │   └── vehicle.csv
     ├── create auto claim tables.ipynb                      # Step 2: Create base tables
     ├── load auto claim tables.ipynb                        # Step 3: Load CSV → tables
     ├── create driver telemetry data for eventhouse.ipynb    # Step 4: Simulate telemetry
