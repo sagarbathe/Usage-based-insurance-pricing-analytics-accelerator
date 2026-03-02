@@ -50,7 +50,8 @@ pricing pipeline** built on Microsoft Fabric:
 
 ## Architecture
 
-<img width="1808" height="860" alt="image" src="https://github.com/user-attachments/assets/b7737b48-6fd7-499d-86b7-ad49c09c626c" />
+<img width="1808" height="860" alt="image" src="https://github.com/user-attachments/assets/f13afb81-bb11-45c7-a298-b823a8640d60" />
+
 
 
 ```
