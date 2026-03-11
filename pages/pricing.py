@@ -38,13 +38,13 @@ def render() -> None:
             st.session_state[view_key] = "dashboard"
             st.rerun()
     with cols[1]:
-        if st.button("💬 Pricing Agent on Semantic Model", key="pricing_btn_agent_sm",
+        if st.button("💬 Pricing Agent on Lakehouse and KQL", key="pricing_btn_agent_sm",
                      use_container_width=True,
                      disabled=(st.session_state[view_key] == "agent_semantic")):
             st.session_state[view_key] = "agent_semantic"
             st.rerun()
     with cols[2]:
-        if st.button("🧠 Pricing Agent on FabricIQ", key="pricing_btn_agent_onto",
+        if st.button("🧠 Pricing Agent on FabricIQ Ontology", key="pricing_btn_agent_onto",
                      use_container_width=True,
                      disabled=(st.session_state[view_key] == "agent_ontology")):
             st.session_state[view_key] = "agent_ontology"
