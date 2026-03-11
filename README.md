@@ -53,8 +53,9 @@ pricing pipeline** built on Microsoft Fabric:
 6. **AI Copilots** — Fabric Data Agents (backed by the OpenAI Assistants
    API) let each persona ask natural-language questions against the Gold
    tables.
-      a. Fabric Data agent built on lakehouse and kql tables
-      b. Fabric Data agent built on FabricIQ ontology
+   
+         a. Fabric Data agent built on lakehouse and kql tables
+         b. Fabric Data agent built on FabricIQ ontology
 
 ---
 
