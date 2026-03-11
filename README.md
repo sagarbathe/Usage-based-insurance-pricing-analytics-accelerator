@@ -293,7 +293,19 @@ To publish them to your Fabric workspace:
 > (Underwriting, Agent/Advisor, Portfolio, Executive), save the `.pbix`
 > files into the `reports/` folder and follow the same publish workflow.
 
-### Step 8 — Create Fabric Data Agents
+### Step 8 — Import Fabric Ontology
+
+Import the pre-built UBI ontology definition into your Fabric workspace.
+See the [Ontology Definition](#ontology-definition) section for full
+instructions. In summary:
+
+1. Clone the [FabricIQ-export_import_package](https://github.com/sagarbathe/FabricIQ-export_import_package) repo.
+2. Use the **import** workflow to upload `ontology/ont_UBI_definition.json`
+   into your target Fabric workspace.
+3. After importing, update the data binding workspace and lakehouse IDs
+   to point to your own Fabric Lakehouse.
+
+### Step 9 — Create Fabric Data Agents
 
 1. In the Fabric workspace, create **Data Agents** under Data Science.
 2. Configure each agent to query the Gold lakehouse tables.
@@ -357,6 +369,10 @@ Replace placeholder endpoints with your actual Data Agent URLs:
 DATA_AGENTS = {
     "pricing": {
         "endpoint": "https://api.fabric.microsoft.com/v1/workspaces/<WORKSPACE_ID>/dataagents/<AGENT_ID>/aiassistant/openai",
+        ...
+    },
+    "pricing_ontology": {
+        "endpoint": "https://api.fabric.microsoft.com/v1/workspaces/<WORKSPACE_ID>/dataagents/<ONTOLOGY_AGENT_ID>/aiassistant/openai",
         ...
     },
     ...
