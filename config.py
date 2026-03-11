@@ -80,6 +80,15 @@ DATA_AGENTS = {
             "List drivers with high severity accidents who were underpriced the following year",
         ],
     },
+    "pricing_ontology": {
+        "name": "Pricing Agent (FabricIQ)",
+        "endpoint": "https://api.fabric.microsoft.com/v1/workspaces/db7dcf85-001e-4277-a85e-3c92029900bc/dataagents/cf55aeb3-4c5c-4b09-9d56-bb32c997e083/aiassistant/openai",
+        "suggested_prompts": [
+            "Which scored policy periods have the highest risk score?",
+            "Show me underpriced policies and their reason codes.",
+            "What is the average premium change for high-risk drivers?",
+        ],
+    },
     "underwriting": {
         "name": "Underwriting Copilot",
         "endpoint": "https://<YOUR_FABRIC_WORKSPACE>.fabric.microsoft.com/dataagent/underwriting-copilot",

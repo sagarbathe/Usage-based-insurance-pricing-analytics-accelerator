@@ -208,19 +208,24 @@ See: [Fabric Data Agent docs](https://learn.microsoft.com/en-us/fabric/data-scie
     if chat_key not in st.session_state:
         st.session_state[chat_key] = []
 
-    # ── Suggested prompts ─────────────────────────────────
-    st.markdown("**💡 Suggested questions:**")
-    selected_prompt = None
-    for i, prompt in enumerate(suggested_prompts):
-        if st.button(prompt, key=f"prompt_{agent_name}_{i}", use_container_width=True):
-            selected_prompt = prompt
+    # ── Layout: chat (left, wider) | suggested prompts (right) ──
+    col_chat, col_prompts = st.columns([3, 1])
 
-    # ── Chat history ──────────────────────────────────────
-    chat_container = st.container(height=350)
-    with chat_container:
-        for msg in st.session_state[chat_key]:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
+    # ── Suggested prompts (right column) ──────────────────
+    selected_prompt = None
+    with col_prompts:
+        st.markdown("**💡 Suggested questions:**")
+        for i, prompt in enumerate(suggested_prompts):
+            if st.button(prompt, key=f"prompt_{agent_name}_{i}", use_container_width=True):
+                selected_prompt = prompt
+
+    # ── Chat history (left column) ────────────────────────
+    with col_chat:
+        chat_container = st.container(height=450)
+        with chat_container:
+            for msg in st.session_state[chat_key]:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
 
     # Use suggested prompt if clicked
     if selected_prompt:

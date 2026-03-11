@@ -13,14 +13,15 @@
 2. [Architecture](#architecture)
 3. [Persona Pages](#persona-pages)
 4. [Gold Tables](#gold-tables)
-5. [Prerequisites](#prerequisites)
-6. [Pre-Work: Setting Up the Fabric Environment](#pre-work-setting-up-the-fabric-environment)
-7. [Application Setup](#application-setup)
-8. [Configuration](#configuration)
-9. [Running the Application](#running-the-application)
-10. [Project Structure](#project-structure)
-11. [Notebooks Reference](#notebooks-reference)
-12. [Troubleshooting](#troubleshooting)
+5. [Ontology Definition](#ontology-definition)
+6. [Prerequisites](#prerequisites)
+7. [Pre-Work: Setting Up the Fabric Environment](#pre-work-setting-up-the-fabric-environment)
+8. [Application Setup](#application-setup)
+9. [Configuration](#configuration)
+10. [Running the Application](#running-the-application)
+11. [Project Structure](#project-structure)
+12. [Notebooks Reference](#notebooks-reference)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -106,6 +107,36 @@ and consumed by the Power BI reports and Data Agents:
 | `gold_expected_loss_scores` | 1 row per policy | Risk score and expected loss cost per policy |
 | `gold_policy_premium_recommendation` | 1 row per policy | Current vs recommended premium, change %, caps, smoothing |
 | `gold_premium_reason_codes` | N rows per policy | Top factors explaining each premium recommendation |
+
+---
+
+## Ontology Definition
+
+This repository includes a pre-built **Fabric Ontology** definition in the
+`ontology/` folder (`ont_UBI_definition.json`). The ontology defines entity
+types (Policyholder, Policy, Vehicle, Claim, Accident, Adjuster, etc.),
+their properties, data bindings to the Lakehouse Gold tables, and
+relationships between entities. Importing this ontology into your Fabric
+workspace enables rich semantic modelling and data agent capabilities.
+
+### Importing the Ontology
+
+To import the ontology definition into your Microsoft Fabric workspace, use
+the **FabricIQ Export/Import Package** tool:
+
+👉 **[FabricIQ Export/Import Package](https://github.com/sagarbathe/FabricIQ-export_import_package)**
+
+Follow the instructions in that repository to:
+
+1. Clone or download the [FabricIQ-export_import_package](https://github.com/sagarbathe/FabricIQ-export_import_package) repo.
+2. Use the **import** workflow to upload `ontology/ont_UBI_definition.json`
+   from this repository into your target Fabric workspace.
+3. The tool will create the ontology item in your workspace with all entity
+   types, property mappings, data bindings, and relationships pre-configured.
+
+> **Note:** After importing, update the data binding workspace and lakehouse
+> IDs in the ontology to point to your own Fabric Lakehouse if they differ
+> from the exported values.
 
 ---
 
@@ -338,6 +369,9 @@ sidebar to view the corresponding Power BI report and Data Agent.
 ├── reports/                   # Power BI report files (.pbix)
 │   └── Pricing Adequacy Dashboard.pbix   # Pricing / Actuarial report
 │
+├── ontology/                  # Fabric Ontology definition
+│   └── ont_UBI_definition.json   # UBI domain ontology (entity types, bindings, relationships)
+│
 └── data/                      # Fabric notebooks & Gold table schemas
     ├── csv/                                                # Source CSV data files
     │   ├── accident.csv
@@ -349,10 +383,11 @@ sidebar to view the corresponding Power BI report and Data Agent.
     ├── create auto claim tables.ipynb                      # Step 2: Create base tables
     ├── load auto claim tables.ipynb                        # Step 3: Load CSV → tables
     ├── create driver telemetry data for eventhouse.ipynb    # Step 4: Simulate telemetry
-    ├── nb_create_gold_tables.ipynb                         # Step 5: Create Gold schemas
-    ├── nb_score_policies_compute_premium.ipynb              # Step 6: Score & compute premiums
     └── gold/
-        └── README.txt          # Gold table export format guide
+        ├── README.txt                                      # Gold table export format guide
+        ├── nb_create_gold_tables.ipynb                     # Step 5: Create Gold schemas
+        ├── nb_create_scored_policy_period.ipynb             # Create scored policy period table
+        └── nb_score_policies_compute_premium.ipynb          # Step 6: Score & compute premiums
 ```
 
 ---
@@ -364,12 +399,13 @@ sidebar to view the corresponding Power BI report and Data Agent.
 | 1 | `create auto claim tables.ipynb` | Fabric Spark | Creates base relational tables (Policyholder, Vehicle, Policy, Adjuster, Accident, Claim) |
 | 2 | `load auto claim tables.ipynb` | Fabric Spark | Loads CSV data into the base tables |
 | 3 | `create driver telemetry data for eventhouse.ipynb` | Fabric Spark | Generates simulated driver telemetry and streams to Eventhouse |
-| 4 | `nb_create_gold_tables.ipynb` | Fabric Spark | Creates Gold-layer Delta table schemas |
-| 5 | `nb_score_policies_compute_premium.ipynb` | Fabric Spark | Feature engineering, risk scoring, premium computation, reason codes |
+| 4 | `gold/nb_create_gold_tables.ipynb` | Fabric Spark | Creates Gold-layer Delta table schemas |
+| 5 | `gold/nb_create_scored_policy_period.ipynb` | Fabric Spark | Creates scored policy period table |
+| 6 | `gold/nb_score_policies_compute_premium.ipynb` | Fabric Spark | Feature engineering, risk scoring, premium computation, reason codes |
 
 > **Important:** All notebooks must be run **in a Fabric Spark environment**
 > attached to your lakehouse. They use PySpark and `%%sql` magic commands.
-> Run them in sequence (1 → 5).
+> Run them in sequence (1 → 6).
 
 ---
 
