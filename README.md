@@ -36,24 +36,34 @@ The solution that unifies telematics (driving behavior) and insurance data to ca
 This solution demonstrates an **end-to-end Usage-Based Insurance (UBI)
 pricing pipeline** built on Microsoft Fabric:
 
-1. **Data Ingestion** — Auto-claims data (policyholders, vehicles, policies,
-   accidents, adjusters, claims) is created and loaded into a Fabric
-   **Lakehouse** via PySpark notebooks.
-2. **Telemetry Generation** — Simulated driver telemetry data (trips, speed,
-   braking, acceleration, cornering, safety scores) is generated and streamed
-   into a Fabric **Eventhouse** for real-time analytics.
-3. **Feature Engineering & Gold Layer** — PySpark notebooks transform raw
-   data into seven Gold-layer Delta tables that power downstream analytics.
-4. **Risk Scoring & Premium Computation** — A rules-based (or ML) model
-   scores each policy's risk and produces recommended premiums with capping,
-   smoothing, and reason-code explainability.
-5. **BI & Analytics** — Power BI reports embedded in the Streamlit app
-   provide interactive dashboards tailored to five insurance personas.
-6. **AI Copilots** — Fabric Data Agents (backed by the OpenAI Assistants
-   API) let each persona ask natural-language questions against the Gold
-   tables.
-   - Fabric Data Agent built on Lakehouse and KQL tables
-   - Fabric Data Agent built on FabricIQ Ontology
+**Step 1: Data Ingestion**
+
+Telematics (driver behavior) data and insurance data (policy, vehicle, customer, claims) are ingested into OneLake. All tables except Telematics are stored in a lakehouse, Telematics data is stored in a KQL table. A notebook simulates telematics data and calculates per-trip and per-driver metrics such as speeding incidents per 100 miles, harsh braking count, night driving percentage, safety scores while csv files are provided for the lakehouse tables
+
+**Step 2: Feature Engineering & Risk Scoring**
+
+Feature engineering is done in Fabric’s integrated Spark Notebooks, however in real insurance scenarios, this would be achieved by ML models., etc. The telematics metrics are aggregated from trip → driver → policy period. The notebooks then generate a driver risk score  for each policy 
+using these features, and combine it with historical claims and accident records to estimate expected future losses. This is essentially the ML/AI step – a predictive model can be trained to compute an expected loss cost or score for each policy period. The result is a set of risk indicators
+ and recommended premium adjustments for each policy (e.g. flagging underpriced policies where the model suggests a higher premium is warranted).
+
+**Step 3: Curated Gold Data & Semantic Model**
+
+The refined outputs (risk scores, recommended premiums, reason codes, etc.) are stored back in the Lakehouse as curated Gold tables. These tables represent the business-friendly data (e.g., policy-level risk scores, recommended premium vs actual premium, loss ratios) ready for analysis. A Power BI Semantic Model is then built on top of the Gold layer. This model (a dataset) defines the relationships between entities (driver → policy → claims) and exposes metrics like actual loss ratio (claims/premium), expected loss cost, recommended premium, and flags for underpriced or high-risk policies
+
+**Step 4: Fabric Ontology**
+
+A Fabric Ontology is developed to provide a unified representation of UBI (Usage-Based Insurance) domain concepts, real-world relationships, business context, and calculations. This standardized model enables consistent analytics and supports natural language querying across the 
+organization.
+
+The sample ontology provided can be imported via an export/import accelerator I built (sagarbathe/FabricIQ-export_import_package)
+
+**Step 5: Analytics & Insights Consumption**
+
+Finally, the accelerator delivers insights through Power BI reports and Copilot experiences (Fabric Data Agent). It includes pre-built Power BI dashboards for different insurance personas. Currently, a Pricing Adequacy Dashboard for actuarial teams highlights the gap between expected 
+loss vs. premiums and identifies policies with potential underpricing (where expected loss exceeds current premium). 
+Fabric Data Agents built on both (the semantic model and Fabric Ontology) are provided enabling users to ask questions in natural language and get answers backed by the data and measures in the semantic model (for instance, “Which policies are underpriced relative to expected 
+loss?” or “Explain this premium increase in plain English.”). This conversational AI layer adds AI explainability on top of the analytics, helping users explore “why” behind the numbers.
+
 
 ---
 
