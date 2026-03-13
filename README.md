@@ -1,9 +1,8 @@
 # 🛡️ UBI Insurance Intelligence App
 
-> **Usage-Based Insurance (UBI) Pricing Solution** — a role-based Streamlit
-> application combining UBI pricing, portfolio risk analytics, and AI
-> explainability powered by **Microsoft Fabric** Gold tables, **Power BI**
-> embedded reports, and **Fabric Data Agents**.
+**Usage-Based Insurance (UBI) Pricing** is an innovation in auto insurance where premiums are adjusted based on a driver’s actual behavior (e.g., speeding, hard braking, mileage, time of day). The Fabric accelerator in the referenced repository demonstrates an end-to-end UBI Pricing solution built on Microsoft Fabric. Its primary goal is to help insurers answer: “Are we pricing risk correctly, and will we hit our target loss ratios?”.
+
+The solution that unifies telematics (driving behavior) and insurance data to calculate driver risk scores and recommend usage-based premiums. It uses Fabric Lakehouse, Spark notebooks (ingestion, transformation, and feature-engineering), curated gold datasets with a semantic model, Power BI dashboards for actuaries/underwriters, and a built-in Copilot (Fabric Data Agent) for Q&A. The accelerator helps insurers ensure premiums align with actual risk by enabling interactive analytics and AI-driven insights on unified data.
 
 ---
 
