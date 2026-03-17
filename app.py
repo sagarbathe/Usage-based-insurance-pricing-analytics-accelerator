@@ -125,7 +125,7 @@ st.markdown(
 # Sidebar – Persona Selector
 # ──────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## 🛡️ UBI Insurance")
+    st.markdown("## 🛡️ Usage-based Pricing")
     st.markdown("##### Intelligence App")
     st.markdown("---")
 
