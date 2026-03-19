@@ -3,9 +3,8 @@ Fabric Data Agent Chat Component.
 
 Renders a persona-specific chat panel that connects to a
 Microsoft Fabric Data Agent using the OpenAI *Assistants* API
-(threads → messages → runs).  Authentication uses the same
-AzureCLI / Managed-Identity credential chain as the Power BI
-embed component — no API keys needed.
+(threads → messages → runs).  Authentication uses the App Service
+Managed Identity — no API keys needed.
 
 Reference:
   https://learn.microsoft.com/en-us/fabric/data-science/data-agent-end-to-end-tutorial
@@ -87,8 +86,8 @@ def _call_data_agent(endpoint: str, message: str) -> str:
     if client is None:
         return (
             "⚠️ **Authentication failed** — could not obtain a token.\n\n"
-            "Make sure you have run `az login` (local dev) or that "
-            "Workspace Identity is enabled (Fabric)."
+            "Ensure the App Service Managed Identity is enabled and has "
+            "access to Fabric."
         )
 
     thread = None
@@ -180,11 +179,11 @@ def render_data_agent_chat(
         st.info(
             "🔗 **Fabric Data Agent placeholder**\n\n"
             "To connect a live agent:\n"
-            "1. Open `config.py`\n"
-            "2. Replace the endpoint URL for this persona\n"
-            "3. Reload the app\n\n"
-            "Authentication is handled automatically via Azure CLI "
-            "(local dev) or Workspace Identity (Fabric).",
+            "1. Set the `FABRIC_*_AGENT_ENDPOINT` variable in `deploy.ps1`\n"
+            "2. Re-run `deploy.ps1` to update App Settings\n"
+            "3. Restart the app\n\n"
+            "Authentication is handled automatically via the App Service "
+            "Managed Identity.",
             icon="🤖",
         )
         with st.expander("🛠️  How to set up a Fabric Data Agent"):
@@ -194,10 +193,10 @@ def render_data_agent_chat(
 2. Create a new **Data Agent** under Data Science
 3. Configure it to query your Gold lakehouse tables
 4. Copy the agent endpoint URL
-5. Paste the endpoint into `config.py`
+5. Set it as `FABRIC_*_AGENT_ENDPOINT` in `deploy.ps1` and re-deploy
 
-No API keys are needed — the app authenticates with the same
-Azure CLI / Workspace Identity used for Power BI.
+No API keys are needed — the app authenticates with the
+App Service Managed Identity.
 
 See: [Fabric Data Agent docs](https://learn.microsoft.com/en-us/fabric/data-science/data-agent-overview)
                 """

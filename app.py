@@ -4,9 +4,9 @@ Usage-based Pricing Intelligence App
 A role-based insurance application combining Usage-Based Pricing,
 Portfolio Risk, and AI Explainability — powered by Microsoft Fabric Gold tables.
 
-Run:
-    cd insurance_app
-    streamlit run app.py
+Deploy to Azure App Service:
+    .\deploy.ps1
+    # see README.md for details
 """
 
 import sys

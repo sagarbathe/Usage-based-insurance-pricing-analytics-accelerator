@@ -12,7 +12,7 @@ Three views:
 import streamlit as st
 
 from config import POWERBI_REPORTS, DATA_AGENTS
-from components.powerbi_embed import render_powerbi_report
+from components.powerbi_embed import render_powerbi_report, render_powerbi_explore
 from components.data_agent_chat import render_data_agent_chat, render_data_agent_chat_input
 
 
@@ -30,7 +30,7 @@ def render() -> None:
     if view_key not in st.session_state:
         st.session_state[view_key] = "dashboard"
 
-    cols = st.columns(3)
+    cols = st.columns(4)
     with cols[0]:
         if st.button("📊 Power BI Dashboard", key="pricing_btn_dashboard",
                      use_container_width=True,
@@ -38,12 +38,18 @@ def render() -> None:
             st.session_state[view_key] = "dashboard"
             st.rerun()
     with cols[1]:
+        if st.button("🔍 Explore / Ad-hoc", key="pricing_btn_explore",
+                     use_container_width=True,
+                     disabled=(st.session_state[view_key] == "explore")):
+            st.session_state[view_key] = "explore"
+            st.rerun()
+    with cols[2]:
         if st.button("💬 Pricing Agent on Lakehouse and KQL", key="pricing_btn_agent_sm",
                      use_container_width=True,
                      disabled=(st.session_state[view_key] == "agent_semantic")):
             st.session_state[view_key] = "agent_semantic"
             st.rerun()
-    with cols[2]:
+    with cols[3]:
         if st.button("🧠 Pricing Agent on FabricIQ Ontology", key="pricing_btn_agent_onto",
                      use_container_width=True,
                      disabled=(st.session_state[view_key] == "agent_ontology")):
@@ -74,7 +80,16 @@ def render() -> None:
             """
         )
 
-    # ── 2. Pricing Agent on Semantic Model ────────────────
+    # ── 2. Explore / Ad-hoc Analysis ────────────────────
+    elif view_mode == "explore":
+        report = POWERBI_REPORTS["pricing"]
+        render_powerbi_explore(
+            explore_report_id=report.get("explore_report_id", ""),
+            group_id=report.get("group_id", ""),
+            title="Pricing Ad-hoc Analysis",
+        )
+
+    # ── 3. Pricing Agent on Semantic Model ────────────────
     elif view_mode == "agent_semantic":
         agent = DATA_AGENTS["pricing"]
         render_data_agent_chat(

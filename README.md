@@ -69,12 +69,13 @@ loss?” or “Explain this premium increase in plain English.”). This convers
 
 ## App UI
 
-The Streamlit application provides an integrated experience with three
+The Streamlit application provides an integrated experience with four
 interactive views per persona:
 
 | View | Description |
 |------|-------------|
-| **📊 Power BI Dashboard** | Embedded Power BI report with interactive visuals tailored to the persona |
+| **📊 Power BI Dashboard** | Embedded Power BI report with interactive visuals tailored to the persona. Personalize Visuals is enabled so users can tweak existing visuals inline. |
+| **🔍 Explore / Ad-hoc** | A blank Power BI report embedded in **edit mode** against the same semantic model. Users can drag fields, create their own visuals, and perform ad-hoc analysis without modifying the published dashboard. |
 | **💬 Data Agent on Lakehouse & KQL** | Natural-language Q&A powered by a Fabric Data Agent querying Lakehouse Gold tables and Eventhouse KQL tables |
 | **🧠 Data Agent on Fabric Ontology** | Natural-language Q&A powered by a Fabric Data Agent backed by a Fabric Ontology for semantic reasoning |
 
@@ -200,14 +201,9 @@ Before setting up the solution, ensure you have:
 - **Azure CLI** installed ([install guide](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli))
 
 ### Power BI
-- Power BI reports published to a workspace accessible by the Fabric
-  workspace identity (or your Azure CLI identity)
+- Power BI reports published to a workspace accessible by the
+  App Service Managed Identity
 - Admin setting enabled: *"Service principals can use Power BI APIs"*
-
-### Local Development
-- **Python 3.10+**
-- **Azure CLI** authenticated (`az login`)
-- **Git** installed
 
 ---
 
@@ -331,8 +327,28 @@ To publish them to your Fabric workspace:
    the **Report ID** (from the URL: `reportId=<GUID>`) and the
    **Workspace ID** / Group ID (from `groupId=<GUID>` or workspace
    settings).
-5. Enter these values in `config.py` under `POWERBI_REPORTS` for the
-   corresponding persona.
+5. Enter these values in `deploy.ps1` as `$PowerBiPricingReportId` and
+   `$PowerBiPricingGroupId` (or set them as App Settings directly).
+
+### Step 7b — Create a Blank Report for Ad-hoc Explore
+
+The **Explore / Ad-hoc** view embeds a blank report in edit mode so users
+can build their own visuals on the fly. This requires a separate report
+linked to the same semantic model:
+
+1. In the Power BI Service, open your workspace.
+2. Find the **semantic model** used by the Pricing report.
+3. Click **…** → **Create report**.
+4. Immediately **save** it (without adding any visuals) — name it
+   something like "UBI Pricing Explore".
+5. Copy the **Report ID** from the URL and enter it in `deploy.ps1` as
+   `$PowerBiPricingExploreReportId`.
+
+> **Why a separate report?** DirectLake semantic models do not support
+> the `type: "create"` Power BI JS SDK embed because the service
+> principal cannot establish a new data source connection via SSO.
+> Embedding an existing (blank) report in edit mode re-uses the report
+> author's data connection and avoids this limitation.
 
 > **Tip:** If you build additional reports for other personas
 > (Underwriting, Agent/Advisor, Portfolio, Executive), save the `.pbix`
@@ -369,7 +385,7 @@ backed by the **Semantic Model** (Lakehouse & KQL tables; created in Step 7) and
 5. Optionally add custom instructions to guide the agent on table
    relationships and common query patterns.
 6. After creation, copy the **agent endpoint URL** from the agent
-   settings for use in `config.py`.
+   settings and set it as `$FabricPricingAgentEndpoint` in `deploy.ps1`.
 
 #### Agent 2 — Data Agent on Fabric Ontology
 
@@ -381,94 +397,155 @@ backed by the **Semantic Model** (Lakehouse & KQL tables; created in Step 7) and
 5. This agent leverages the ontology's entity types, relationships,
    and semantic metadata for richer natural-language reasoning.
 6. After creation, copy the **agent endpoint URL** from the agent
-   settings for use in `config.py`.
+   settings and set it as `$FabricOntologyAgentEndpoint` in `deploy.ps1`.
 
 ---
 
 ## Application Setup
 
-```bash
-# Clone the repository
-git clone https://github.com/sagarbathe/UBIPricing_solution.git
-cd UBIPricing_solution
+### Deploy to Azure App Service
 
-# Create a virtual environment (recommended)
-python -m venv .venv
-.venv\Scripts\activate        # Windows
-# source .venv/bin/activate   # macOS/Linux
+The app runs on **Azure App Service (Linux, Python 3.11+)**.
+Authentication uses a **system-assigned Managed Identity** — no API keys
+or client secrets are needed.
 
-# Install dependencies
-pip install -r requirements.txt
+#### Quick deploy (PowerShell)
 
-# Authenticate with Azure (required for Power BI embedding & Data Agents)
+1. Open `deploy.ps1` and fill in the configuration variables at the top.
+2. Run:
+
+```powershell
 az login
+.\deploy.ps1
 ```
+
+The script creates a resource group, App Service Plan, Web App, enables
+Managed Identity, sets all App Settings, and zip-deploys the code.
+
+#### Manual deploy
+
+1. **Create the App Service:**
+
+   ```powershell
+   az group create -n rg-ubi-pricing -l centralus
+   az appservice plan create -n asp-ubi-pricing -g rg-ubi-pricing --sku B1 --is-linux
+   az webapp create -n app-ubi-pricing -g rg-ubi-pricing -p asp-ubi-pricing --runtime "PYTHON:3.11"
+   ```
+
+2. **Enable Managed Identity:**
+
+   ```powershell
+   az webapp identity assign -n app-ubi-pricing -g rg-ubi-pricing
+   ```
+
+3. **Set Startup Command:**
+
+   ```powershell
+   az webapp config set -n app-ubi-pricing -g rg-ubi-pricing --startup-file "python -m streamlit run app.py --server.port=8000 --server.address=0.0.0.0 --server.headless=true --server.enableCORS=false --server.enableXsrfProtection=true --browser.gatherUsageStats=false"
+   ```
+
+4. **Configure App Settings (environment variables):**
+
+   ```powershell
+   az webapp config appsettings set -n app-ubi-pricing -g rg-ubi-pricing --settings `
+       WEBSITES_PORT=8000 `
+       FABRIC_WORKSPACE_ID="<YOUR_WORKSPACE_ID>" `
+       AZURE_TENANT_ID="<YOUR_TENANT_ID>" `
+       POWERBI_PRICING_REPORT_ID="<YOUR_PRICING_REPORT_ID>" `
+       POWERBI_PRICING_GROUP_ID="<YOUR_WORKSPACE_ID>" `
+       FABRIC_PRICING_AGENT_ENDPOINT="<YOUR_PRICING_AGENT_URL>" `
+       FABRIC_PRICING_ONTOLOGY_AGENT_ENDPOINT="<YOUR_ONTOLOGY_AGENT_URL>"
+   ```
+
+5. **Deploy code:**
+
+   ```powershell
+   az webapp up -n app-ubi-pricing -g rg-ubi-pricing --runtime "PYTHON:3.11"
+   ```
+
+6. **Grant Managed Identity access:**
+   - In the **Power BI Admin Portal**, add the App Service MI to a security
+     group allowed to use Power BI APIs.
+   - In the **Power BI workspace**, grant the MI at least *Member* access
+     (required for DirectLake datasets).
+   - The MI automatically gets a token for the Fabric Data Agent API.
+
+#### Environment Variables (App Settings)
+
+All sensitive values are read from environment variables at runtime.
+Set them in the Azure Portal (Configuration → Application settings)
+or via `az webapp config appsettings set`.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `WEBSITES_PORT` | Yes | Must be `8000` |
+| `SCM_DO_BUILD_DURING_DEPLOYMENT` | Yes | Must be `true` — triggers `pip install` via Oryx during deployment |
+| `FABRIC_WORKSPACE_ID` | Yes | Your Fabric workspace GUID |
+| `AZURE_TENANT_ID` | Yes | Your Azure AD tenant GUID |
+| `POWERBI_PRICING_REPORT_ID` | Yes | Pricing report GUID |
+| `POWERBI_PRICING_EXPLORE_REPORT_ID` | No | Blank report GUID for ad-hoc explore (see [Step 7b](#step-7b--create-a-blank-report-for-ad-hoc-explore)) |
+| `POWERBI_PRICING_GROUP_ID` | No | Defaults to `FABRIC_WORKSPACE_ID` |
+| `POWERBI_UNDERWRITING_REPORT_ID` | No | Underwriting report GUID |
+| `POWERBI_AGENT_REPORT_ID` | No | Agent/Advisor report GUID |
+| `POWERBI_PORTFOLIO_REPORT_ID` | No | Portfolio report GUID |
+| `POWERBI_EXECUTIVE_REPORT_ID` | No | Executive report GUID |
+| `FABRIC_PRICING_AGENT_ENDPOINT` | Yes | Full URL for the Pricing Data Agent |
+| `FABRIC_PRICING_ONTOLOGY_AGENT_ENDPOINT` | Yes | Full URL for the Ontology Data Agent |
+| `FABRIC_UNDERWRITING_AGENT_ENDPOINT` | No | Underwriting agent URL |
+| `FABRIC_AGENT_ADVISOR_ENDPOINT` | No | Agent/Advisor agent URL |
+| `FABRIC_PORTFOLIO_AGENT_ENDPOINT` | No | Portfolio agent URL |
+| `FABRIC_EXECUTIVE_AGENT_ENDPOINT` | No | Executive agent URL |
 
 ### Dependencies
 
 | Package | Version | Purpose |
 |---------|---------|---------|
 | `streamlit` | ≥ 1.30.0 | Web application framework |
-| `azure-identity` | ≥ 1.15.0 | Azure AD authentication (CLI + Managed Identity) |
+| `azure-identity` | ≥ 1.15.0 | Azure AD authentication (Managed Identity) |
 | `openai` | ≥ 1.70.0 | Fabric Data Agent communication (Assistants API) |
+| `plotly` | ≥ 5.18.0 | Interactive charts |
+| `pandas` | ≥ 2.0.0 | Data manipulation |
 
 ---
 
 ## Configuration
 
-Edit **`config.py`** to wire the app to your environment:
+All configuration is done via **App Settings** (environment variables)
+on the Azure App Service. Set them in `deploy.ps1` before deploying,
+or update them later in the Azure Portal (Configuration → Application
+settings) / via `az webapp config appsettings set`.
 
 ### Power BI Reports
 
-For each persona, fill in `report_id` and `group_id`:
+Set the report ID and group ID for each persona as App Settings:
 
-```python
-POWERBI_REPORTS = {
-    "pricing": {
-        "report_id": "<YOUR_REPORT_GUID>",
-        "group_id": "<YOUR_WORKSPACE_GUID>",
-        ...
-    },
-    ...
-}
+```
+POWERBI_PRICING_REPORT_ID=<GUID>
+POWERBI_PRICING_GROUP_ID=<GUID>
 ```
 
 ### Fabric Data Agents
 
-Replace placeholder endpoints with your actual Data Agent URLs:
+Set the full endpoint URL for each Data Agent as App Settings:
 
-```python
-DATA_AGENTS = {
-    "pricing": {
-        "endpoint": "https://api.fabric.microsoft.com/v1/workspaces/<WORKSPACE_ID>/dataagents/<AGENT_ID>/aiassistant/openai",
-        ...
-    },
-    "pricing_ontology": {
-        "endpoint": "https://api.fabric.microsoft.com/v1/workspaces/<WORKSPACE_ID>/dataagents/<ONTOLOGY_AGENT_ID>/aiassistant/openai",
-        ...
-    },
-    ...
-}
+```
+FABRIC_PRICING_AGENT_ENDPOINT=https://api.fabric.microsoft.com/v1/workspaces/<WS>/dataagents/<AGENT>/aiassistant/openai
+FABRIC_PRICING_ONTOLOGY_AGENT_ENDPOINT=https://api.fabric.microsoft.com/v1/workspaces/<WS>/dataagents/<AGENT>/aiassistant/openai
 ```
 
 ### Authentication
 
-- **Local development:** Run `az login` — the app uses
-  `AzureCliCredential` automatically.
-- **Fabric deployment:** Enable Workspace Identity — the app uses
-  `ManagedIdentityCredential` automatically.
-- No API keys or client secrets are needed.
+The app uses the **system-assigned Managed Identity** on the Azure App
+Service. No API keys, client secrets, or manual login is required.
 
 ---
 
 ## Running the Application
 
-```bash
-streamlit run app.py
-```
-
-The app opens at `http://localhost:8501`. Select a persona from the
-sidebar to view the corresponding Power BI report and Data Agent.
+After deploying (see [Deploy to Azure App Service](#deploy-to-azure-app-service)),
+the app is available at `https://<APP_NAME>.azurewebsites.net`.
+The inline startup command launches Streamlit on port 8000, which Azure
+proxies to HTTPS on port 443.
 
 ---
 
@@ -479,10 +556,15 @@ sidebar to view the corresponding Power BI report and Data Agent.
 ├── config.py                  # Power BI reports, Data Agent endpoints, persona definitions
 ├── requirements.txt           # Python dependencies
 ├── README.md                  # This file
+├── startup.sh                 # Azure App Service startup script
+├── deploy.ps1                 # PowerShell deployment script
+│
+├── .streamlit/
+│   └── config.toml            # Streamlit server configuration
 │
 ├── components/                # Reusable UI components
-│   ├── powerbi_auth.py        # Azure AD token acquisition for Power BI embedding
-│   ├── powerbi_embed.py       # Power BI JS SDK embed renderer
+│   ├── powerbi_auth.py        # Managed Identity token acquisition (view + edit embed tokens)
+│   ├── powerbi_embed.py       # Power BI JS SDK embed renderer (dashboard view + edit-mode explore)
 │   ├── data_agent_chat.py     # Fabric Data Agent chat panel (OpenAI Assistants API)
 │   └── kpi_tables.py          # KPI cards and data table components
 │
@@ -540,12 +622,17 @@ sidebar to view the corresponding Power BI report and Data Agent.
 
 | Issue | Solution |
 |-------|---------|
-| Power BI report shows sign-in prompt | Ensure `report_id` and `group_id` are correct in `config.py`. Enable Workspace Identity or run `az login`. |
-| Data Agent returns authentication error | Run `az login` locally, or enable Workspace Identity in Fabric. |
-| Data Agent placeholder message appears | Replace the `<YOUR_...>` endpoint in `config.py` with your actual Data Agent URL. |
+| Power BI report shows sign-in prompt | Ensure `report_id` and `group_id` are set correctly in App Settings. Verify the MI is enabled and has *Member* access on the workspace. |
+| "DirectLake not supported with V1 embed token" | The app uses V2 multi-resource `GenerateToken` API. Ensure the code is up to date — V1 per-report tokens do not support DirectLake datasets. |
+| Explore view: "Entra ID authentication failed" / data source credentials error | DirectLake requires the calling identity to resolve data connections. The Explore view uses a blank report in edit mode (not `type: "create"`) to avoid this. Ensure `POWERBI_PRICING_EXPLORE_REPORT_ID` is set and the MI has *Member* access. See [Step 7b](#step-7b--create-a-blank-report-for-ad-hoc-explore). |
+| Data Agent returns authentication error | Enable Managed Identity on the App Service and grant it access to Fabric. |
+| Data Agent placeholder message appears | Set the corresponding `FABRIC_*_AGENT_ENDPOINT` App Setting. |
+| App Service shows "Application Error" | Check logs: `az webapp log tail -n app-ubi-pricing -g rg-ubi-pricing`. Common causes: missing `WEBSITES_PORT=8000` or `SCM_DO_BUILD_DURING_DEPLOYMENT=true` setting. |
+| App Service returns 502 / timeout | Streamlit may still be starting. B1 SKU takes ~30-60s. Ensure `WEBSITES_PORT` is `8000` and the startup command is set correctly. |
+| Managed Identity token fails on App Service | Ensure system-assigned MI is enabled (Identity blade). Grant the MI *Member* on the Power BI workspace. Enable "Service principals can use Power BI APIs" in the Power BI Admin Portal. |
 | Notebooks fail with table-not-found | Run notebooks in order (1 → 6). Ensure the lakehouse is attached to the notebook. |
 | Missing CSV files error | Upload the source CSVs to `Files/AutoClaims_csv/` in your lakehouse before running `load auto claim tables.ipynb`. |
-| Streamlit import errors | Ensure all dependencies are installed: `pip install -r requirements.txt` |
+| Streamlit import errors | Ensure all dependencies are installed: `pip install -r requirements.txt`. On Azure, set `SCM_DO_BUILD_DURING_DEPLOYMENT=true`. |
 
 ---
 
