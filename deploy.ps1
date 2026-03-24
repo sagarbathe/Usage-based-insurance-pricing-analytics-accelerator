@@ -39,7 +39,7 @@ $PowerBiPortfolioReportId       = ""                                  # optional
 $PowerBiExecutiveReportId       = ""                                  # optional
 
 # Fabric Data Agent endpoints (full URLs)
-$FabricPricingAgentEndpoint     = "https://api.fabric.microsoft.com/v1/workspaces/db7dcf85-001e-4277-a85e-3c92029900bc/dataagents/7a3c56ac-ed13-4fe8-bac2-e2a1cb295ab3/aiassistant/openai"     # e.g. https://api.fabric.microsoft.com/v1/workspaces/.../aiassistant/openai
+$FabricPricingAgentEndpoint     = "https://api.fabric.microsoft.com/v1/workspaces/db7dcf85-001e-4277-a85e-3c92029900bc/dataagents/50a54dc0-3f9f-44b2-84f6-8e54999bffa8/aiassistant/openai"     # e.g. https://api.fabric.microsoft.com/v1/workspaces/.../aiassistant/openai
 $FabricOntologyAgentEndpoint    = "https://api.fabric.microsoft.com/v1/workspaces/db7dcf85-001e-4277-a85e-3c92029900bc/dataagents/cf55aeb3-4c5c-4b09-9d56-bb32c997e083/aiassistant/openai"    # e.g. https://api.fabric.microsoft.com/v1/workspaces/.../aiassistant/openai
 $FabricUnderwritingEndpoint     = ""                                  # optional
 $FabricAgentAdvisorEndpoint     = ""                                  # optional
