@@ -8,11 +8,11 @@ The solution that unifies telematics (driving behavior) and insurance data to ca
 
 ## 📊 Repository Analytics
 
-This repository includes automated statistics collection:
-- **Single-repo stats:** Track this repository's views, clones, stars → [stats/SUMMARY.md](stats/SUMMARY.md)
-- **Multi-repo stats:** Track ALL your repositories in one place → [all-repos-stats/README.md](all-repos-stats/README.md)
+This repository tracks its own statistics automatically:
+- **Repository stats:** Views, clones, stars, forks → [stats/SUMMARY.md](stats/SUMMARY.md)
+- **Multi-repo analytics:** Track ALL your GitHub repositories → **[capturerepostats](https://github.com/sagarbathe/capturerepostats)**
 
-Both systems run automatically via GitHub Actions and generate daily reports.
+Stats are collected daily via GitHub Actions and generate automated reports.
 
 ---
 
