@@ -6,6 +6,16 @@ The solution that unifies telematics (driving behavior) and insurance data to ca
 
 ---
 
+## 📊 Repository Analytics
+
+This repository includes automated statistics collection:
+- **Single-repo stats:** Track this repository's views, clones, stars → [stats/SUMMARY.md](stats/SUMMARY.md)
+- **Multi-repo stats:** Track ALL your repositories in one place → [all-repos-stats/README.md](all-repos-stats/README.md)
+
+Both systems run automatically via GitHub Actions and generate daily reports.
+
+---
+
 ## Table of Contents
 
 1. [Architecture](#architecture)

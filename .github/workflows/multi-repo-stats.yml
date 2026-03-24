@@ -1,0 +1,60 @@
+name: Multi-Repository Statistics Collector
+
+on:
+  schedule:
+    # Run daily at 00:00 UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allow manual trigger
+    inputs:
+      include_private:
+        description: 'Include private repositories'
+        required: false
+        default: 'true'
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  collect-all-repos-stats:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install requests PyGithub pandas plotly
+      
+      - name: Collect statistics from all repositories
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          INCLUDE_PRIVATE: ${{ github.event.inputs.include_private || 'true' }}
+        run: |
+          python .github/scripts/collect_all_repos_stats.py
+      
+      - name: Generate analytics dashboard
+        run: |
+          python .github/scripts/generate_dashboard.py
+      
+      - name: Commit and push statistics
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          if [ -n "$(git status --porcelain)" ]; then
+            git add all-repos-stats/
+            git commit -m "Update multi-repo statistics - $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            git push
+          else
+            echo "No changes to commit"
+          fi
