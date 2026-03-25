@@ -1,14 +1,18 @@
 # Repository Statistics Summary
 
-**Last Updated:** Waiting for first automated run
+**Last Updated:** 2026-03-25 01:54:16 UTC
 
-Repository statistics will be collected automatically by GitHub Actions.
+**Repository:** [sagarbathe/Usage-based-Pricing-Accelerator-Azure-apps](https://github.com/sagarbathe/Usage-based-Pricing-Accelerator-Azure-apps)
 
-To trigger the first collection manually:
-1. Go to: https://github.com/sagarbathe/Usage-based-Pricing-Accelerator-Azure-apps/actions
-2. Select "Repository Statistics" workflow
-3. Click "Run workflow"
+## 📊 Current Metrics
+
+- ⭐ **Stars:** 0
+- 👀 **Watchers:** 0
+- 🍴 **Forks:** 0
+- 🐛 **Open Issues:** 0
+- 📦 **Size:** 2,821 KB
+
+## 📈 Traffic (Last 14 Days)
 
 ---
-
 *Generated automatically by GitHub Actions*
