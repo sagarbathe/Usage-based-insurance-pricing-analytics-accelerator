@@ -3,23 +3,8 @@
 
 $ErrorActionPreference = "Stop"
 
-# Configuration
-$ResourceGroup = "rg-ubi-pricing"
-$Location = "centralus"
-$ContainerRegistry = "acrubipricingsagar"  # Must be globally unique, lowercase, no hyphens
-$ContainerAppEnv = "env-ubi-pricing"
-$ContainerAppName = "app-ubi-pricing"
-$ImageName = "ubi-pricing-app"
-$ImageTag = "latest"
-
-# Fabric & Power BI config
-$FabricWorkspaceId = "db7dcf85-001e-4277-a85e-3c92029900bc"
-$AzureTenantId = "6d9c4b13-597a-4bd5-9af2-5987259103fd"
-$PowerBiPricingReportId = "76cdd8e3-f32a-4de1-b167-74ef41440769"
-$PowerBiPricingExploreReportId = "c663f8be-c2a6-4848-b771-5a7b37514ecd"
-$PowerBiPricingGroupId = $FabricWorkspaceId
-$FabricPricingAgentEndpoint = "https://api.fabric.microsoft.com/v1/workspaces/db7dcf85-001e-4277-a85e-3c92029900bc/dataagents/7a3c56ac-ed13-4fe8-bac2-e2a1cb295ab3/aiassistant/openai"
-$FabricOntologyAgentEndpoint = "https://api.fabric.microsoft.com/v1/workspaces/db7dcf85-001e-4277-a85e-3c92029900bc/dataagents/cf55aeb3-4c5c-4b09-9d56-bb32c997e083/aiassistant/openai"
+# Load configuration from shared config file
+. "$PSScriptRoot\deployment-config.ps1"
 
 Write-Host "`n========================================" -ForegroundColor Cyan
 Write-Host "Azure Container Apps Deployment" -ForegroundColor Cyan
@@ -121,6 +106,28 @@ if ($DeploymentType -eq "update") {
     
     if ($LASTEXITCODE -ne 0) { throw "Failed to create Container App" }
     Write-Host "==> Container App created with managed identity" -ForegroundColor Green
+}
+
+# Step 7: Restart the latest revision to ensure clean start with new configuration
+Write-Host "==> Restarting the latest revision..." -ForegroundColor Yellow
+$LatestRevision = az containerapp revision list `
+    --name $ContainerAppName `
+    --resource-group $ResourceGroup `
+    --query "[0].name" `
+    -o tsv
+if ($LASTEXITCODE -eq 0 -and $LatestRevision) {
+    az containerapp revision restart `
+        --name $ContainerAppName `
+        --resource-group $ResourceGroup `
+        --revision $LatestRevision `
+        --output none
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "==> Latest revision restarted successfully" -ForegroundColor Green
+    } else {
+        Write-Host "Warning: Restart command failed, but deployment may still be successful" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "Warning: Could not determine latest revision, skipping restart" -ForegroundColor Yellow
 }
 
 # Get the app URL

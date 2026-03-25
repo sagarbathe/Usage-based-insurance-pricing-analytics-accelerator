@@ -11,6 +11,7 @@ Reference:
 """
 
 import time
+import traceback
 import uuid
 import typing as t
 
@@ -78,29 +79,32 @@ def _build_openai_client(base_url: str):
 def _get_existing_or_create_new_thread(base_url: str, bearer_token: str, thread_name: str = None) -> dict:
     """
     Get an existing thread or create a new thread for the Fabric Data Agent.
+    Uses the Fabric-specific thread API endpoint.
     
-    This method ensures proper thread management by either retrieving an existing
-    thread with the given name or creating a new one if it doesn't exist.
+    This enables conversation persistence: providing the same thread_name
+    across multiple calls will reuse the same thread, maintaining conversation
+    history. If thread_name is None, a unique random name is generated.
     
     Parameters
     ----------
     base_url : str
-        The Data Agent REST endpoint (will be modified to access thread API).
+        The Data Agent REST endpoint.
     bearer_token : str
         The AAD bearer token for authentication.
     thread_name : str, optional
-        Name for the thread. If None, generates a unique thread name (creates new thread each time).
+        Name for the thread. If None, generates a unique thread name.
+        Use the same name to continue a conversation with history.
         
     Returns
     -------
     dict
         Thread information with 'id' and 'name' keys.
     """
-    # Generate unique thread name if not provided (ensures new thread per request)
+    # Generate unique thread name if not provided
     if thread_name is None:
         thread_name = f'external-client-thread-{uuid.uuid4()}'
     
-    # Adjust URL format for thread API
+    # Adjust URL format for thread API (use Fabric's private endpoint)
     if "aiskills" in base_url:
         thread_api_base = base_url.replace("aiskills", "dataagents").removesuffix("/openai").replace("/aiassistant", "/__private/aiassistant")
     else:
@@ -126,11 +130,13 @@ def _get_existing_or_create_new_thread(base_url: str, bearer_token: str, thread_
 
 def _call_data_agent(endpoint: str, message: str, thread_name: str = None) -> str:
     """
-    Send a question to a Fabric Data Agent via the OpenAI
-    Assistants API and return the response text.
+    Send a question to a Fabric Data Agent using OpenAI Assistants API pattern.
 
-    Flow: get/create thread → create assistant → post message →
-          create run → poll until complete → read reply.
+    Flow: create assistant → get/create thread → check for in-progress runs →
+          post message → create run → poll until complete → read reply.
+          
+    Threads are kept alive for conversation history. If a run is already in progress,
+    we wait for it to complete before starting a new one.
           
     Parameters
     ----------
@@ -139,9 +145,10 @@ def _call_data_agent(endpoint: str, message: str, thread_name: str = None) -> st
     message : str
         The question to send to the agent.
     thread_name : str, optional
-        Name for the conversation thread. If provided, reuses existing thread.
-        If None, creates a new unique thread for each call.
+        Name for the conversation thread. If None, generates a unique random name.
+        Using the same thread_name maintains conversation history.
     """
+    # Build OpenAI client
     client = _build_openai_client(endpoint.rstrip("/"))
     if client is None:
         return (
@@ -149,32 +156,60 @@ def _call_data_agent(endpoint: str, message: str, thread_name: str = None) -> st
             "Ensure the App Service Managed Identity is enabled and has "
             "access to Fabric."
         )
-
+    
     try:
-        # 1 ─ Get bearer token for thread API
+        # 1 ─ Get bearer token
         bearer_token = _get_bearer_token()
+        if bearer_token is None:
+            return "⚠️ **Authentication failed** — could not obtain a token."
         
-        # 2 ─ Get existing thread or create new one
+        # 2 ─ Create assistant (required by Fabric Data Agents even though model is not used)
+        assistant = client.beta.assistants.create(model="not used")
+        
+        # 3 ─ Get existing thread or create new one using Fabric's private API
         thread_info = _get_existing_or_create_new_thread(endpoint, bearer_token, thread_name)
         thread_id = thread_info['id']
-        
-        # 3 ─ Create assistant (Fabric ignores the model value)
-        assistant = client.beta.assistants.create(model="not-used")
 
-        # 4 ─ Post user message
+        # 4 ─ Check for any in-progress runs and wait for them to complete
+        try:
+            runs = client.beta.threads.runs.list(thread_id=thread_id, limit=5)
+            for existing_run in runs.data:
+                if existing_run.status in ["queued", "in_progress"]:
+                    print(f"⏳ Waiting for existing run {existing_run.id} to complete...")
+                    # Wait for the existing run to complete
+                    wait_start = time.time()
+                    while existing_run.status in ["queued", "in_progress"]:
+                        if time.time() - wait_start > 30:  # Wait max 30 seconds for existing run
+                            # Cancel the stuck run
+                            try:
+                                client.beta.threads.runs.cancel(thread_id=thread_id, run_id=existing_run.id)
+                                print(f"⚠️ Cancelled stuck run {existing_run.id}")
+                            except Exception as cancel_error:
+                                print(f"⚠️ Could not cancel run: {cancel_error}")
+                            break
+                        time.sleep(2)
+                        existing_run = client.beta.threads.runs.retrieve(
+                            thread_id=thread_id,
+                            run_id=existing_run.id
+                        )
+        except Exception as check_error:
+            # If checking runs fails, log but continue - might be first run on thread
+            print(f"⚠️ Could not check existing runs: {check_error}")
+
+        # 5 ─ Post user message
         client.beta.threads.messages.create(
             thread_id=thread_id,
             role="user",
             content=message,
         )
 
-        # 5 ─ Create run
+        # 6 ─ Create run with the assistant we created
         run = client.beta.threads.runs.create(
             thread_id=thread_id,
             assistant_id=assistant.id,
         )
 
-        # 6 ─ Poll until terminal state
+        # 7 ─ Poll until terminal state
         terminal_states = {"completed", "failed", "cancelled", "requires_action"}
         poll_interval = 2
         timeout_seconds = 120
@@ -182,6 +217,12 @@ def _call_data_agent(endpoint: str, message: str, thread_name: str = None) -> st
 
         while run.status not in terminal_states:
             if time.time() - start_time > timeout_seconds:
+                # Try to cancel the run on timeout
+                try:
+                    client.beta.threads.runs.cancel(thread_id=thread_id, run_id=run.id)
+                    print(f"⚠️ Cancelled run {run.id} due to timeout")
+                except Exception as cancel_error:
+                    print(f"⚠️ Could not cancel run: {cancel_error}")
                 return "⚠️ **Timeout** — the Data Agent did not respond within 2 minutes."
             time.sleep(poll_interval)
             run = client.beta.threads.runs.retrieve(
@@ -190,14 +231,28 @@ def _call_data_agent(endpoint: str, message: str, thread_name: str = None) -> st
             )
 
         if run.status != "completed":
-            return f"⚠️ **Data Agent run finished with status:** `{run.status}`"
+            # Display detailed error information
+            error_details = f"⚠️ **Data Agent run finished with status:** `{run.status}`\n\n"
+            error_details += f"**Run ID:** `{run.id}`\n"
+            error_details += f"**Thread ID:** `{thread_id}`\n"
+            error_details += f"**Assistant ID:** `{assistant.id}`\n\n"
+            
+            if hasattr(run, 'last_error') and run.last_error:
+                error_details += f"**Error Details:**\n"
+                error_details += f"- **Code:** `{run.last_error.code if hasattr(run.last_error, 'code') else 'N/A'}`\n"
+                error_details += f"- **Message:** {run.last_error.message if hasattr(run.last_error, 'message') else 'N/A'}\n"
+            else:
+                error_details += "**Error Details:** No error information available\n"
+            
+            return error_details
 
-        # 7 ─ Read assistant reply
+        # 8 ─ Read assistant reply
         messages = client.beta.threads.messages.list(
             thread_id=thread_id,
             order="asc",
         )
-        # Return the last assistant message
+        
+        # Get the response - thread is kept alive for conversation history
         for msg in reversed(messages.data):
             if msg.role == "assistant" and msg.content:
                 return msg.content[0].text.value
@@ -205,7 +260,12 @@ def _call_data_agent(endpoint: str, message: str, thread_name: str = None) -> st
         return "⚠️ The Data Agent returned an empty response."
 
     except Exception as exc:
-        return f"⚠️ **Request failed:** {exc}"
+        # Display detailed exception information
+        error_msg = f"⚠️ **Request failed**\n\n"
+        error_msg += f"**Exception Type:** `{type(exc).__name__}`\n"
+        error_msg += f"**Error Message:** {str(exc)}\n\n"
+        error_msg += f"**Stack Trace:**\n```\n{traceback.format_exc()}\n```"
+        return error_msg
 
 
 def render_data_agent_chat(
@@ -261,6 +321,11 @@ See: [Fabric Data Agent docs](https://learn.microsoft.com/en-us/fabric/data-scie
     chat_key = f"chat_history_{agent_name.replace(' ', '_').lower()}"
     if chat_key not in st.session_state:
         st.session_state[chat_key] = []
+    
+    # Generate unique session-specific thread ID (one per browser session)
+    thread_id_key = "_data_agent_session_id"
+    if thread_id_key not in st.session_state:
+        st.session_state[thread_id_key] = str(uuid.uuid4())
 
     # ── Layout: chat (left, wider) | suggested prompts (right) ──
     col_chat, col_prompts = st.columns([3, 1])
@@ -286,8 +351,10 @@ See: [Fabric Data Agent docs](https://learn.microsoft.com/en-us/fabric/data-scie
         st.session_state[chat_key].append({"role": "user", "content": selected_prompt})
 
         with st.spinner(f"{agent_name} is thinking…"):
-            # Use agent_name as thread identifier for conversation persistence
-            thread_name = agent_name.replace(' ', '_').lower()
+            # Create session-specific thread name for conversation persistence
+            # Each browser session gets its own thread, maintaining history within that session
+            session_id = st.session_state.get("_data_agent_session_id", str(uuid.uuid4()))
+            thread_name = f"{agent_name.replace(' ', '_').lower()}_session_{session_id}"
             response = _call_data_agent(endpoint, selected_prompt, thread_name)
 
         st.session_state[chat_key].append({"role": "assistant", "content": response})
@@ -305,6 +372,11 @@ def render_data_agent_chat_input(agent_name: str, endpoint: str) -> None:
     chat_key = f"chat_history_{agent_name.replace(' ', '_').lower()}"
     if chat_key not in st.session_state:
         st.session_state[chat_key] = []
+    
+    # Ensure session ID exists
+    thread_id_key = "_data_agent_session_id"
+    if thread_id_key not in st.session_state:
+        st.session_state[thread_id_key] = str(uuid.uuid4())
 
     user_input = st.chat_input(
         f"Ask {agent_name}…",
@@ -315,8 +387,10 @@ def render_data_agent_chat_input(agent_name: str, endpoint: str) -> None:
         st.session_state[chat_key].append({"role": "user", "content": user_input})
 
         with st.spinner(f"{agent_name} is thinking…"):
-            # Use agent_name as thread identifier for conversation persistence
-            thread_name = agent_name.replace(' ', '_').lower()
+            # Create session-specific thread name for conversation persistence
+            # Each browser session gets its own thread, maintaining history within that session
+            session_id = st.session_state.get("_data_agent_session_id", str(uuid.uuid4()))
+            thread_name = f"{agent_name.replace(' ', '_').lower()}_session_{session_id}"
             response = _call_data_agent(endpoint, user_input, thread_name)
 
         st.session_state[chat_key].append({"role": "assistant", "content": response})

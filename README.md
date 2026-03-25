@@ -212,7 +212,7 @@ Before setting up the solution, ensure you have:
 
 ### Power BI
 - Power BI reports published to a workspace accessible by the
-  App Service Managed Identity
+  Container App Managed Identity
 - Admin setting enabled: *"Service principals can use Power BI APIs"*
 
 ---
@@ -337,8 +337,8 @@ To publish them to your Fabric workspace:
    the **Report ID** (from the URL: `reportId=<GUID>`) and the
    **Workspace ID** / Group ID (from `groupId=<GUID>` or workspace
    settings).
-5. Enter these values in `deploy.ps1` as `$PowerBiPricingReportId` and
-   `$PowerBiPricingGroupId` (or set them as App Settings directly).
+5. Enter these values in `deployment-config.ps1` as `$PowerBiPricingReportId` and
+   `$PowerBiPricingGroupId`.
 
 ### Step 7b — Create a Blank Report for Ad-hoc Explore
 
@@ -351,7 +351,7 @@ linked to the same semantic model:
 3. Click **…** → **Create report**.
 4. Immediately **save** it (without adding any visuals) — name it
    something like "UBI Pricing Explore".
-5. Copy the **Report ID** from the URL and enter it in `deploy.ps1` as
+5. Copy the **Report ID** from the URL and enter it in `deployment-config.ps1` as
    `$PowerBiPricingExploreReportId`.
 
 > **Why a separate report?** DirectLake semantic models do not support
@@ -395,7 +395,7 @@ backed by the **Semantic Model** (Lakehouse & KQL tables; created in Step 7) and
 5. Optionally add custom instructions to guide the agent on table
    relationships and common query patterns.
 6. After creation, copy the **agent endpoint URL** from the agent
-   settings and set it as `$FabricPricingAgentEndpoint` in `deploy.ps1`.
+   settings and set it as `$FabricPricingAgentEndpoint` in `deployment-config.ps1`.
 
 #### Agent 2 — Data Agent on Fabric Ontology
 
@@ -407,89 +407,82 @@ backed by the **Semantic Model** (Lakehouse & KQL tables; created in Step 7) and
 5. This agent leverages the ontology's entity types, relationships,
    and semantic metadata for richer natural-language reasoning.
 6. After creation, copy the **agent endpoint URL** from the agent
-   settings and set it as `$FabricOntologyAgentEndpoint` in `deploy.ps1`.
+   settings and set it as `$FabricOntologyAgentEndpoint` in `deployment-config.ps1`.
 
 ---
 
 ## Application Setup
 
-### Deploy to Azure App Service
+### Deploy to Azure Container Apps
 
-The app runs on **Azure App Service (Linux, Python 3.11+)**.
+The app runs on **Azure Container Apps** using Docker containers.
 Authentication uses a **system-assigned Managed Identity** — no API keys
 or client secrets are needed.
 
 #### Quick deploy (PowerShell)
 
-1. Open `deploy.ps1` and fill in the configuration variables at the top.
+1. Edit configuration in `deployment-config.ps1` (all IDs, endpoints, etc.)
 2. Run:
 
 ```powershell
 az login
-.\deploy.ps1
+.\deploy-containerapp.ps1
 ```
 
-The script creates a resource group, App Service Plan, Web App, enables
-Managed Identity, sets all App Settings, and zip-deploys the code.
+The script creates a resource group, Container Registry, Container Apps
+environment, builds a Docker image, deploys the container, and enables
+Managed Identity. On subsequent runs, it **updates** the existing app
+(preserving the managed identity).
 
 #### Manual deploy
 
-1. **Create the App Service:**
+1. **Create Container Registry and Environment:**
 
    ```powershell
    az group create -n rg-ubi-pricing -l centralus
-   az appservice plan create -n asp-ubi-pricing -g rg-ubi-pricing --sku B1 --is-linux
-   az webapp create -n app-ubi-pricing -g rg-ubi-pricing -p asp-ubi-pricing --runtime "PYTHON:3.11"
+   az acr create -n acrubipricingsagar -g rg-ubi-pricing --sku Basic --admin-enabled true
+   az containerapp env create -n env-ubi-pricing -g rg-ubi-pricing -l centralus
    ```
 
-2. **Enable Managed Identity:**
+2. **Build and push Docker image:**
 
    ```powershell
-   az webapp identity assign -n app-ubi-pricing -g rg-ubi-pricing
+   az acr build --registry acrubipricingsagar --image ubi-pricing-app:latest --file Dockerfile .
    ```
 
-3. **Set Startup Command:**
+3. **Deploy Container App with Managed Identity:**
 
    ```powershell
-   az webapp config set -n app-ubi-pricing -g rg-ubi-pricing --startup-file "python -m streamlit run app.py --server.port=8000 --server.address=0.0.0.0 --server.headless=true --server.enableCORS=false --server.enableXsrfProtection=true --browser.gatherUsageStats=false"
+   az containerapp create -n app-ubi-pricing -g rg-ubi-pricing `
+       --environment env-ubi-pricing `
+       --image acrubipricingsagar.azurecr.io/ubi-pricing-app:latest `
+       --registry-server acrubipricingsagar.azurecr.io `
+       --target-port 8000 --ingress external `
+       --system-assigned `
+       --cpu 1.0 --memory 2.0Gi `
+       --min-replicas 1 --max-replicas 3 `
+       --env-vars "FABRIC_WORKSPACE_ID=<YOUR_WORKSPACE_ID>" "AZURE_TENANT_ID=<YOUR_TENANT_ID>" ...
    ```
 
-4. **Configure App Settings (environment variables):**
-
-   ```powershell
-   az webapp config appsettings set -n app-ubi-pricing -g rg-ubi-pricing --settings `
-       WEBSITES_PORT=8000 `
-       FABRIC_WORKSPACE_ID="<YOUR_WORKSPACE_ID>" `
-       AZURE_TENANT_ID="<YOUR_TENANT_ID>" `
-       POWERBI_PRICING_REPORT_ID="<YOUR_PRICING_REPORT_ID>" `
-       POWERBI_PRICING_GROUP_ID="<YOUR_WORKSPACE_ID>" `
-       FABRIC_PRICING_AGENT_ENDPOINT="<YOUR_PRICING_AGENT_URL>" `
-       FABRIC_PRICING_ONTOLOGY_AGENT_ENDPOINT="<YOUR_ONTOLOGY_AGENT_URL>"
-   ```
-
-5. **Deploy code:**
-
-   ```powershell
-   az webapp up -n app-ubi-pricing -g rg-ubi-pricing --runtime "PYTHON:3.11"
-   ```
-
-6. **Grant Managed Identity access:**
-   - In the **Power BI Admin Portal**, add the App Service MI to a security
-     group allowed to use Power BI APIs.
+4. **Grant Managed Identity access:**
+   - In the **Power BI Admin Portal**, enable "Service principals can use Fabric public APIs"
+     for a security group containing the Container App's managed identity.
    - In the **Power BI workspace**, grant the MI at least *Member* access
      (required for DirectLake datasets).
-   - The MI automatically gets a token for the Fabric Data Agent API.
+   - The MI automatically gets tokens for Power BI and Fabric Data Agent APIs.
 
-#### Environment Variables (App Settings)
+#### Environment Variables
 
 All sensitive values are read from environment variables at runtime.
-Set them in the Azure Portal (Configuration → Application settings)
-or via `az webapp config appsettings set`.
+Edit `deployment-config.ps1` before deploying, or update the Container App
+environment variables later via:
+
+```powershell
+az containerapp update -n app-ubi-pricing -g rg-ubi-pricing --set-env-vars "KEY=VALUE"
+```
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `WEBSITES_PORT` | Yes | Must be `8000` |
-| `SCM_DO_BUILD_DURING_DEPLOYMENT` | Yes | Must be `true` — triggers `pip install` via Oryx during deployment |
 | `FABRIC_WORKSPACE_ID` | Yes | Your Fabric workspace GUID |
 | `AZURE_TENANT_ID` | Yes | Your Azure AD tenant GUID |
 | `POWERBI_PRICING_REPORT_ID` | Yes | Pricing report GUID |
@@ -520,27 +513,26 @@ or via `az webapp config appsettings set`.
 
 ## Configuration
 
-All configuration is done via **App Settings** (environment variables)
-on the Azure App Service. Set them in `deploy.ps1` before deploying,
-or update them later in the Azure Portal (Configuration → Application
-settings) / via `az webapp config appsettings set`.
+All configuration is done via **environment variables** in the Container App.
+Edit `deployment-config.ps1` before deploying, or update the Container App
+environment variables later via `az containerapp update --set-env-vars`.
 
 ### Power BI Reports
 
-Set the report ID and group ID for each persona as App Settings:
+Set the report ID and group ID for each persona in `deployment-config.ps1`:
 
-```
-POWERBI_PRICING_REPORT_ID=<GUID>
-POWERBI_PRICING_GROUP_ID=<GUID>
+```powershell
+$PowerBiPricingReportId = "<GUID>"
+$PowerBiPricingGroupId = "<GUID>"
 ```
 
 ### Fabric Data Agents
 
-Set the full endpoint URL for each Data Agent as App Settings:
+Set the full endpoint URL for each Data Agent in `deployment-config.ps1`:
 
-```
-FABRIC_PRICING_AGENT_ENDPOINT=https://api.fabric.microsoft.com/v1/workspaces/<WS>/dataagents/<AGENT>/aiassistant/openai
-FABRIC_PRICING_ONTOLOGY_AGENT_ENDPOINT=https://api.fabric.microsoft.com/v1/workspaces/<WS>/dataagents/<AGENT>/aiassistant/openai
+```powershell
+$FabricPricingAgentEndpoint = "https://api.fabric.microsoft.com/v1/workspaces/<WS>/dataagents/<AGENT>/aiassistant/openai"
+$FabricOntologyAgentEndpoint = "https://api.fabric.microsoft.com/v1/workspaces/<WS>/dataagents/<AGENT>/aiassistant/openai"
 ```
 
 ### Authentication
@@ -552,9 +544,13 @@ Service. No API keys, client secrets, or manual login is required.
 
 ## Running the Application
 
-After deploying (see [Deploy to Azure App Service](#deploy-to-azure-app-service)),
-the app is available at `https://<APP_NAME>.azurewebsites.net`.
-The inline startup command launches Streamlit on port 8000, which Azure
+After deploying (see [Deploy to Azure Container Apps](#deploy-to-azure-container-apps)),
+the app is available at the URL provided by the deployment script:
+```
+https://app-ubi-pricing.delightfulmushroom-<ID>.centralus.azurecontainerapps.io
+```
+
+The Docker container runs Streamlit on port 8000, which Container Apps
 proxies to HTTPS on port 443.
 
 ---
@@ -565,9 +561,10 @@ proxies to HTTPS on port 443.
 ├── app.py                     # Main Streamlit entry point & persona router
 ├── config.py                  # Power BI reports, Data Agent endpoints, persona definitions
 ├── requirements.txt           # Python dependencies
+├── Dockerfile                 # Container image definition
+├── deployment-config.ps1      # Centralized configuration (edit this!)
+├── deploy-containerapp.ps1    # PowerShell deployment script for Container Apps
 ├── README.md                  # This file
-├── startup.sh                 # Azure App Service startup script
-├── deploy.ps1                 # PowerShell deployment script
 │
 ├── .streamlit/
 │   └── config.toml            # Streamlit server configuration
@@ -632,17 +629,17 @@ proxies to HTTPS on port 443.
 
 | Issue | Solution |
 |-------|---------|
-| Power BI report shows sign-in prompt | Ensure `report_id` and `group_id` are set correctly in App Settings. Verify the MI is enabled and has *Member* access on the workspace. |
+| Power BI report shows sign-in prompt | Ensure `report_id` and `group_id` are set correctly in `deployment-config.ps1`. Verify the MI is enabled and has *Member* access on the workspace. |
 | "DirectLake not supported with V1 embed token" | The app uses V2 multi-resource `GenerateToken` API. Ensure the code is up to date — V1 per-report tokens do not support DirectLake datasets. |
 | Explore view: "Entra ID authentication failed" / data source credentials error | DirectLake requires the calling identity to resolve data connections. The Explore view uses a blank report in edit mode (not `type: "create"`) to avoid this. Ensure `POWERBI_PRICING_EXPLORE_REPORT_ID` is set and the MI has *Member* access. See [Step 7b](#step-7b--create-a-blank-report-for-ad-hoc-explore). |
-| Data Agent returns authentication error | Enable Managed Identity on the App Service and grant it access to Fabric. |
-| Data Agent placeholder message appears | Set the corresponding `FABRIC_*_AGENT_ENDPOINT` App Setting. |
-| App Service shows "Application Error" | Check logs: `az webapp log tail -n app-ubi-pricing -g rg-ubi-pricing`. Common causes: missing `WEBSITES_PORT=8000` or `SCM_DO_BUILD_DURING_DEPLOYMENT=true` setting. |
-| App Service returns 502 / timeout | Streamlit may still be starting. B1 SKU takes ~30-60s. Ensure `WEBSITES_PORT` is `8000` and the startup command is set correctly. |
-| Managed Identity token fails on App Service | Ensure system-assigned MI is enabled (Identity blade). Grant the MI *Member* on the Power BI workspace. Enable "Service principals can use Power BI APIs" in the Power BI Admin Portal. |
+| Data Agent returns authentication error | Enable Managed Identity on the Container App and grant it access to Fabric. Add to security group `grp_spFabricAPIaccess` with tenant setting "Service principals can call Fabric public APIs" enabled. |
+| Data Agent placeholder message appears | Set the corresponding `FABRIC_*_AGENT_ENDPOINT` variable in `deployment-config.ps1`. |
+| Container App shows "Application Error" | Check logs: `az containerapp logs show -n app-ubi-pricing -g rg-ubi-pricing --tail 100`. Common causes: missing environment variables or incorrect Docker configuration. |
+| Container App returns 502 / timeout | Container may still be starting. Check logs and verify health probes are passing. |
+| Managed Identity token fails | Ensure system-assigned MI is enabled. Grant the MI *Member* on the Power BI workspace. Add MI to security group with "Service principals can call Fabric public APIs" enabled in Power BI Admin Portal. Wait 10-15 minutes for permissions to propagate. |
 | Notebooks fail with table-not-found | Run notebooks in order (1 → 6). Ensure the lakehouse is attached to the notebook. |
 | Missing CSV files error | Upload the source CSVs to `Files/AutoClaims_csv/` in your lakehouse before running `load auto claim tables.ipynb`. |
-| Streamlit import errors | Ensure all dependencies are installed: `pip install -r requirements.txt`. On Azure, set `SCM_DO_BUILD_DURING_DEPLOYMENT=true`. |
+| Docker build fails | Ensure `requirements.txt` is valid and all packages are compatible with Python 3.11. Check ACR build logs for specific errors. |
 
 ---
 
