@@ -60,7 +60,8 @@ Stats are collected daily via GitHub Actions and generate automated reports.
 
 ## Architecture
 
-<img width="896" height="477" alt="image" src="https://github.com/user-attachments/assets/182f8c63-f239-4f01-8e3d-9bded7c6e0c0" />
+<img width="1323" height="499" alt="image" src="https://github.com/user-attachments/assets/6c86d158-016b-4ab3-9584-38a4dbf2d6c8" />
+
 
 ### Azure ML Integration Architecture
 
