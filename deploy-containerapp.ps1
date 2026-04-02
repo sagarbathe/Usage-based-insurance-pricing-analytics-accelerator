@@ -10,6 +10,52 @@ Write-Host "`n========================================" -ForegroundColor Cyan
 Write-Host "Azure Container Apps Deployment" -ForegroundColor Cyan
 Write-Host "========================================`n" -ForegroundColor Cyan
 
+# Check Azure ML Model Deployment Status
+Write-Host "`n==> Checking Azure ML Model Configuration..." -ForegroundColor Cyan
+
+$mlConfigured = $false
+if ($AzureMLEndpointUrl -and $AzureMLEndpointKey -and $AzureMLEndpointUrl -ne "" -and $AzureMLEndpointKey -ne "") {
+    Write-Host "    ✓ Azure ML endpoint is configured" -ForegroundColor Green
+    Write-Host "      Endpoint: $($AzureMLEndpointUrl.Substring(0, [Math]::Min(50, $AzureMLEndpointUrl.Length)))..." -ForegroundColor Gray
+    Write-Host "      Model: $AzureMLModelName v$AzureMLModelVersion" -ForegroundColor Gray
+    $mlConfigured = $true
+} else {
+    Write-Host "    ⚠️  Azure ML endpoint is NOT configured" -ForegroundColor Yellow
+    Write-Host "      The notebook scoring will not work without an ML model endpoint" -ForegroundColor Yellow
+}
+
+Write-Host ""
+$deployML = Read-Host "Do you want to (re)deploy the Azure ML model? (y/N)"
+
+if ($deployML -eq 'y' -or $deployML -eq 'Y') {
+    Write-Host "`n========================================" -ForegroundColor Magenta
+    Write-Host "Azure ML Model Deployment Required" -ForegroundColor Magenta
+    Write-Host "========================================" -ForegroundColor Magenta
+    Write-Host ""
+    Write-Host "To deploy/redeploy the ML model:" -ForegroundColor Yellow
+    Write-Host "  1. Open Azure ML Studio: https://ml.azure.com" -ForegroundColor White
+    Write-Host "  2. Navigate to workspace: $AzureMLWorkspaceName" -ForegroundColor White
+    Write-Host "  3. Open/upload notebook: data/gold/azureml_train_deploy_model.ipynb" -ForegroundColor White
+    Write-Host "  4. Run all cells (Steps 1-10)" -ForegroundColor White
+    Write-Host "  5. Copy Endpoint URL and API Key from Step 10 output" -ForegroundColor White
+    Write-Host "  6. Update deployment-config.ps1:" -ForegroundColor White
+    Write-Host "       `$AzureMLEndpointUrl = 'https://your-endpoint-url/score'" -ForegroundColor Gray
+    Write-Host "       `$AzureMLEndpointKey = 'your-primary-key'" -ForegroundColor Gray
+    Write-Host "  7. Re-run this script: .\deploy-containerapp.ps1" -ForegroundColor White
+    Write-Host ""
+    Write-Host "Press any key to exit..." -ForegroundColor Yellow
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 0
+} else {
+    if (-not $mlConfigured) {
+        Write-Host "    ⚠️  Continuing without ML model deployment" -ForegroundColor Yellow
+        Write-Host "       Notebook scoring features will not work until model is deployed" -ForegroundColor Yellow
+    } else {
+        Write-Host "    ✓ Using existing ML model configuration" -ForegroundColor Green
+    }
+    Write-Host ""
+}
+
 # Step 1: Create Resource Group
 Write-Host "==> Creating resource group..." -ForegroundColor Yellow
 az group create --name $ResourceGroup --location $Location --output none
@@ -73,6 +119,15 @@ if ($DeploymentType -eq "update") {
             "POWERBI_PRICING_GROUP_ID=$PowerBiPricingGroupId" `
             "FABRIC_PRICING_AGENT_ENDPOINT=$FabricPricingAgentEndpoint" `
             "FABRIC_PRICING_ONTOLOGY_AGENT_ENDPOINT=$FabricOntologyAgentEndpoint" `
+            "AZURE_ML_SUBSCRIPTION_ID=$AzureMLSubscriptionId" `
+            "AZURE_ML_RESOURCE_GROUP=$AzureMLResourceGroup" `
+            "AZURE_ML_WORKSPACE_NAME=$AzureMLWorkspaceName" `
+            "AZURE_ML_ENDPOINT_NAME=$AzureMLEndpointName" `
+            "AZURE_ML_ENDPOINT_URL=$AzureMLEndpointUrl" `
+            "AZURE_ML_ENDPOINT_KEY=$AzureMLEndpointKey" `
+            "AZURE_ML_DEPLOYMENT_NAME=$AzureMLDeploymentName" `
+            "AZURE_ML_MODEL_NAME=$AzureMLModelName" `
+            "AZURE_ML_MODEL_VERSION=$AzureMLModelVersion" `
         --output none
     
     if ($LASTEXITCODE -ne 0) { throw "Failed to update Container App" }
@@ -102,6 +157,15 @@ if ($DeploymentType -eq "update") {
             "POWERBI_PRICING_GROUP_ID=$PowerBiPricingGroupId" `
             "FABRIC_PRICING_AGENT_ENDPOINT=$FabricPricingAgentEndpoint" `
             "FABRIC_PRICING_ONTOLOGY_AGENT_ENDPOINT=$FabricOntologyAgentEndpoint" `
+            "AZURE_ML_SUBSCRIPTION_ID=$AzureMLSubscriptionId" `
+            "AZURE_ML_RESOURCE_GROUP=$AzureMLResourceGroup" `
+            "AZURE_ML_WORKSPACE_NAME=$AzureMLWorkspaceName" `
+            "AZURE_ML_ENDPOINT_NAME=$AzureMLEndpointName" `
+            "AZURE_ML_ENDPOINT_URL=$AzureMLEndpointUrl" `
+            "AZURE_ML_ENDPOINT_KEY=$AzureMLEndpointKey" `
+            "AZURE_ML_DEPLOYMENT_NAME=$AzureMLDeploymentName" `
+            "AZURE_ML_MODEL_NAME=$AzureMLModelName" `
+            "AZURE_ML_MODEL_VERSION=$AzureMLModelVersion" `
         --output none
     
     if ($LASTEXITCODE -ne 0) { throw "Failed to create Container App" }

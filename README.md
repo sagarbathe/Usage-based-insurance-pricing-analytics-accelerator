@@ -1,8 +1,15 @@
-# 🛡️ Usage-based Pricing Intelligence App
+# 🛡️ Usage-Based Insurance Pricing Analytics Accelerator
 
-**Usage-Based Insurance (UBI) Pricing** is an innovation in auto insurance where premiums are adjusted based on a driver’s actual behavior (e.g., speeding, hard braking, mileage, time of day). The Fabric accelerator in the referenced repository demonstrates an end-to-end UBI Pricing solution built on Microsoft Fabric. Its primary goal is to help insurers answer: “Are we pricing risk correctly, and will we hit our target loss ratios?”.
+**Usage-Based Insurance (UBI) Pricing** is an innovation in auto insurance where premiums are adjusted based on a driver's actual behavior (e.g., speeding, hard braking, mileage, time of day). This accelerator demonstrates an end-to-end UBI pricing solution built on **Microsoft Fabric** and **Azure Machine Learning**. Its primary goal is to help insurers answer: "Are we pricing risk correctly, and will we hit our target loss ratios?".
 
-The solution that unifies telematics (driving behavior) and insurance data to calculate driver risk scores and recommend usage-based premiums. It uses Fabric Lakehouse, Spark notebooks (ingestion, transformation, and feature-engineering), curated gold datasets with a semantic model, Power BI dashboards for actuaries/underwriters, and a built-in Copilot (Fabric Data Agent) for Q&A. The accelerator helps insurers ensure premiums align with actual risk by enabling interactive analytics and AI-driven insights on unified data.
+This solution unifies telematics (driving behavior) and insurance data to calculate driver risk scores using **production-grade ML models** and recommend usage-based premiums. It leverages:
+- **Microsoft Fabric**: Lakehouse, Spark notebooks, KQL Eventhouse for ingestion, transformation, and feature engineering
+- **Azure Machine Learning**: Production ML model training, deployment, and managed online inference endpoints
+- **Power BI**: Interactive dashboards with embedded analytics
+- **Fabric Data Agent**: Natural language Q&A powered by Fabric Ontology and semantic models
+- **Streamlit App**: Unified experience connecting all components
+
+The accelerator helps insurers ensure premiums align with actual risk by enabling interactive analytics, ML-driven predictions, and AI-powered insights on unified data.
 
 ---
 
@@ -16,22 +23,38 @@ Stats are collected daily via GitHub Actions and generate automated reports.
 
 ---
 
+## 🆕 What's New: Azure ML Integration
+
+**This accelerator extends the Fabric-only approach with Azure Machine Learning:**
+
+- ✅ **Production ML Models**: Replace rules-based scoring with trained ML models
+- ✅ **Multi-Output Regression**: Predict risk_factor, expected_loss_cost, and risk_score simultaneously
+- ✅ **Managed Online Endpoints**: Real-time inference with auto-scaling and monitoring
+- ✅ **End-to-End MLOps**: Training data preparation → Model training → Model registration → Deployment → Inference
+- ✅ **Seamless Integration**: Fabric notebooks call Azure ML endpoints via HTTP for predictions
+
+📖 **[Azure ML Integration Guide](data/gold/README_ML_MODEL.md)** - Complete setup instructions
+
+---
+
 ## Table of Contents
 
 1. [Architecture](#architecture)
 2. [Solution Overview](#solution-overview)
-3. [App UI](#app-ui)
-4. [Persona Pages](#persona-pages)
-5. [Gold Tables](#gold-tables)
-6. [Ontology Definition](#ontology-definition)
-7. [Prerequisites](#prerequisites)
-8. [Pre-Work: Setting Up the Fabric Environment](#pre-work-setting-up-the-fabric-environment)
-9. [Application Setup](#application-setup)
-10. [Configuration](#configuration)
-11. [Running the Application](#running-the-application)
-12. [Project Structure](#project-structure)
-13. [Notebooks Reference](#notebooks-reference)
-14. [Troubleshooting](#troubleshooting)
+3. [Azure ML Workflow](#azure-ml-workflow)
+4. [App UI](#app-ui)
+5. [Persona Pages](#persona-pages)
+6. [Gold Tables](#gold-tables)
+7. [Ontology Definition](#ontology-definition)
+8. [Prerequisites](#prerequisites)
+9. [Pre-Work: Setting Up the Fabric Environment](#pre-work-setting-up-the-fabric-environment)
+10. [Azure ML Setup](#azure-ml-setup)
+11. [Application Setup](#application-setup)
+12. [Configuration](#configuration)
+13. [Running the Application](#running-the-application)
+14. [Project Structure](#project-structure)
+15. [Notebooks Reference](#notebooks-reference)
+16. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -39,48 +62,123 @@ Stats are collected daily via GitHub Actions and generate automated reports.
 
 <img width="896" height="477" alt="image" src="https://github.com/user-attachments/assets/182f8c63-f239-4f01-8e3d-9bded7c6e0c0" />
 
+### Azure ML Integration Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 1. Fabric: Prepare Training Data                           │
+│    └─> fabric_prep_training_data.ipynb                     │
+│        - Reads gold tables (features + actual loss)         │
+│        - Engineers target variables                         │
+│        - Saves to gold_ml_training_data table               │
+│        - Exports to parquet for Azure ML                    │
+└─────────────────────────────────────────────────────────────┘
+                            ↓ (download parquet)
+┌─────────────────────────────────────────────────────────────┐
+│ 2. Azure ML: Train, Register & Deploy                      │
+│    └─> azureml_train_deploy_model.ipynb                    │
+│        - Loads training data from uploaded parquet          │
+│        - Trains multi-output regression model               │
+│        - Registers model in Azure ML workspace              │
+│        - Creates online endpoint & deploys                  │
+└─────────────────────────────────────────────────────────────┘
+                            ↓ (endpoint URI + key)
+┌─────────────────────────────────────────────────────────────┐
+│ 3. Fabric: Score Policies                                  │
+│    └─> nb_score_policies_compute_premium.ipynb (enhanced)  │
+│        - Reads policy features from gold tables             │
+│        - Calls Azure ML endpoint for predictions            │
+│        - Saves scores to gold_expected_loss_scores          │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 4. Streamlit App                                            │
+│    └─> app.py + Fabric Data Agent                          │
+│        - Reads gold_expected_loss_scores table              │
+│        - Powers dashboards and chat experiences             │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ---
 
 ## Solution Overview
 
-This solution demonstrates an **end-to-end Usage-Based Insurance (UBI)
-pricing pipeline** built on Microsoft Fabric:
+This solution demonstrates an **end-to-end Usage-Based Insurance (UBI) pricing pipeline** built on Microsoft Fabric and Azure ML:
 
 **Step 1: Data Ingestion**
 
-Telematics (driver behavior) data and insurance data (policy, vehicle, customer, claims) are ingested into OneLake. All tables except Telematics are stored in a lakehouse, Telematics data is stored in a KQL table. A notebook simulates telematics data and calculates per-trip and per-driver metrics such as speeding incidents per 100 miles, harsh braking count, night driving percentage, safety scores while csv files are provided for the lakehouse tables
+Telematics (driver behavior) data and insurance data (policy, vehicle, customer, claims) are ingested into OneLake. All tables except Telematics are stored in a lakehouse; Telematics data is stored in a KQL table. A notebook simulates telematics data and calculates per-trip and per-driver metrics such as speeding incidents per 100 miles, harsh braking count, night driving percentage, and safety scores, while CSV files are provided for the lakehouse tables.
 
-**Step 2: Feature Engineering & Risk Scoring**
+**Step 2: Feature Engineering & ML Training** 🆕
 
-Feature engineering is done in Fabric’s integrated Spark Notebooks, however in real insurance scenarios, this would be achieved by ML models., etc. The telematics metrics are aggregated from trip → driver → policy period. The notebooks then generate a driver risk score  for each policy 
-using these features, and combine it with historical claims and accident records to estimate expected future losses. This is essentially the ML/AI step – a predictive model can be trained to compute an expected loss cost or score for each policy period. The result is a set of risk indicators
- and recommended premium adjustments for each policy (e.g. flagging underpriced policies where the model suggests a higher premium is warranted).
+Feature engineering is done in Fabric's integrated Spark Notebooks. The telematics metrics are aggregated from trip → driver → policy period. **Unlike rules-based approaches, this accelerator uses Azure ML to train production-grade machine learning models**. The notebook [fabric_prep_training_data.ipynb](data/gold/fabric_prep_training_data.ipynb) prepares training data with features and historical outcomes. Then [azureml_train_deploy_model.ipynb](data/gold/azureml_train_deploy_model.ipynb) trains a multi-output regression model to predict:
+- `risk_factor`: Multiplier for baseline loss cost
+- `expected_loss_cost`: Predicted claim cost
+- `risk_score`: Normalized risk score (0-100)
 
-**Step 3: Curated Gold Data & Semantic Model**
+The trained model is registered and deployed to an Azure ML managed online endpoint for real-time inference.
 
-The refined outputs (risk scores, recommended premiums, reason codes, etc.) are stored back in the Lakehouse as curated Gold tables. These tables represent the business-friendly data (e.g., policy-level risk scores, recommended premium vs actual premium, loss ratios) ready for analysis. A Power BI Semantic Model is then built on top of the Gold layer. This model (a dataset) defines the relationships between entities (driver → policy → claims) and exposes metrics like actual loss ratio (claims/premium), expected loss cost, recommended premium, and flags for underpriced or high-risk policies
+**Step 3: Risk Scoring via ML Endpoint** 🆕
 
-**Step 4: Fabric Ontology**
+The refined scoring process now uses the Azure ML endpoint instead of rules-based logic. The notebook [nb_score_policies_compute_premium.ipynb](data/gold/nb_score_policies_compute_premium.ipynb) reads policy features and calls the Azure ML endpoint via HTTP REST API to get predictions. Results are stored in the `gold_expected_loss_scores` table with model metadata (model name, version, scoring timestamp).
 
-A Fabric Ontology is developed to provide a unified representation of UBI (Usage-Based Insurance) domain concepts, real-world relationships, business context, and calculations. This standardized model enables consistent analytics and supports natural language querying across the 
-organization.
+**Step 4: Curated Gold Data & Semantic Model**
 
-The sample ontology provided can be imported via an export/import accelerator I built (sagarbathe/FabricIQ-export_import_package)
+The refined outputs (ML-based risk scores, recommended premiums, reason codes, etc.) are stored back in the Lakehouse as curated Gold tables. These tables represent the business-friendly data (e.g., policy-level risk scores, recommended premium vs actual premium, loss ratios) ready for analysis. A Power BI Semantic Model is then built on top of the Gold layer. This model (a dataset) defines the relationships between entities (driver → policy → claims) and exposes metrics like actual loss ratio (claims/premium), expected loss cost, recommended premium, and flags for underpriced or high-risk policies.
 
-**Step 5: Analytics & Insights Consumption**
+**Step 5: Fabric Ontology**
 
-Finally, the accelerator delivers insights through Power BI reports and Copilot experiences (Fabric Data Agent). It includes pre-built Power BI dashboards for different insurance personas. Currently, a Pricing Adequacy Dashboard for actuarial teams highlights the gap between expected 
-loss vs. premiums and identifies policies with potential underpricing (where expected loss exceeds current premium). 
-Fabric Data Agents built on both (the semantic model and Fabric Ontology) are provided enabling users to ask questions in natural language and get answers backed by the data and measures in the semantic model (for instance, “Which policies are underpriced relative to expected 
-loss?” or “Explain this premium increase in plain English.”). This conversational AI layer adds AI explainability on top of the analytics, helping users explore “why” behind the numbers.
+A Fabric Ontology is developed to provide a unified representation of UBI (Usage-Based Insurance) domain concepts, real-world relationships, business context, and calculations. This standardized model enables consistent analytics and supports natural language querying across the organization.
 
+The sample ontology provided can be imported via an export/import accelerator: [FabricIQ-export_import_package](https://github.com/sagarbathe/FabricIQ-export_import_package)
+
+**Step 6: Analytics & Insights Consumption**
+
+Finally, the accelerator delivers insights through Power BI reports and Copilot experiences (Fabric Data Agent). It includes pre-built Power BI dashboards for different insurance personas. Currently, a Pricing Adequacy Dashboard for actuarial teams highlights the gap between expected loss vs. premiums and identifies policies with potential underpricing (where expected loss exceeds current premium). Fabric Data Agents built on both (the semantic model and Fabric Ontology) enable users to ask questions in natural language and get answers backed by the data and measures in the semantic model (for instance, "Which policies are underpriced relative to expected loss?" or "Explain this premium increase in plain English."). This conversational AI layer adds AI explainability on top of the analytics, helping users explore "why" behind the numbers.
+
+---
+
+## Azure ML Workflow
+
+The Azure ML integration follows this workflow:
+
+### 1. Prepare Training Data (Fabric)
+**Notebook**: [fabric_prep_training_data.ipynb](data/gold/fabric_prep_training_data.ipynb)
+- Load features from `gold_policy_period_features`
+- Load actual outcomes from `gold_policy_period_loss`
+- Engineer 3 target variables based on historical data
+- Save to `gold_ml_training_data` table
+- Export as parquet for Azure ML
+
+### 2. Train & Deploy Model (Azure ML)
+**Notebook**: [azureml_train_deploy_model.ipynb](data/gold/azureml_train_deploy_model.ipynb)
+- Upload training parquet to Azure ML
+- Train MultiOutputRegressor with GradientBoostingRegressor
+- Register model in Azure ML workspace
+- Create managed online endpoint (e.g., `ubi-risk-endpoint`)
+- Deploy model with auto-scaling
+- Test endpoint and capture URL/key
+
+### 3. Score Policies (Fabric)
+**Notebook**: [nb_score_policies_compute_premium.ipynb](data/gold/nb_score_policies_compute_premium.ipynb)
+- Read policy features from gold tables
+- Call Azure ML endpoint via HTTP POST
+- Round predictions to 2 decimal places
+- Save to `gold_expected_loss_scores` with model metadata
+
+### 4. Calculate Premiums (Fabric)
+- Load ML predictions from `gold_expected_loss_scores`
+- Apply business rules (target loss ratio, expense load, profit load)
+- Apply caps and smoothing
+- Save to `gold_policy_premium_recommendation`
+
+📖 **Detailed Guide**: [Azure ML Integration Guide](data/gold/README_ML_MODEL.md)
 
 ---
 
 ## App UI
 
-The Streamlit application provides an integrated experience with four
-interactive views per persona:
+The Streamlit application provides an integrated experience with four interactive views per persona:
 
 | View | Description |
 |------|-------------|
@@ -93,10 +191,7 @@ interactive views per persona:
 
 ![alt text](image.png)
 
-
-> **Note:** This version currently implements the **Pricing / Actuarial**
-> persona only. Additional personas (Underwriting, Agent/Advisor, Portfolio
-> Manager, Executive/Strategy) will be added in future releases.
+> **Note:** This version currently implements the **Pricing / Actuarial** persona only. Additional personas (Underwriting, Agent/Advisor, Portfolio Manager, Executive/Strategy) will be added in future releases.
 
 ---
 
@@ -125,22 +220,36 @@ interactive views per persona:
 │                        ▼                                     │
 │                 Streamlit App                                 │
 │                 (this repo)                                   │
+│                        │                                     │
+└────────────────────────┼─────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  Azure Machine Learning                      │
 │                                                              │
-└─────────────────────────────────────────────────────────────┘
+│  Training Data ──▶ Model Training ──▶ Model Registry         │
+│                                           │                  │
+│                                           ▼                  │
+│                                    Managed Online            │
+│                                      Endpoint                │
+│                                           │                  │
+│                                           ▼                  │
+│                                  (Real-time Inference)       │
+│                                           │                  │
+└───────────────────────────────────────────┼─────────────────┘
+                                            │
+                                            ▼
+                                    Fabric Notebooks
+                                    (scoring policies)
 ```
 
 ---
 
 ## Persona Pages
 
-The app is designed for five role-based views. Each page pairs an **embedded
-Power BI report** with **Fabric Data Agent** chat panels. Users can switch
-between the Power BI dashboard, a Data Agent on the Lakehouse/KQL semantic
-model, or a Data Agent on the Fabric Ontology.
+The app is designed for five role-based views. Each page pairs an **embedded Power BI report** with **Fabric Data Agent** chat panels. Users can switch between the Power BI dashboard, a Data Agent on the Lakehouse/KQL semantic model, or a Data Agent on the Fabric Ontology.
 
-> **Current release:** Only the **Pricing / Actuarial** persona is fully
-> implemented. The remaining personas are scaffolded and will be completed
-> in upcoming releases.
+> **Current release:** Only the **Pricing / Actuarial** persona is fully implemented. The remaining personas are scaffolded and will be completed in upcoming releases.
 
 | Persona | Page | Key Question | Status |
 |---------|------|-------------|--------|
@@ -154,8 +263,7 @@ model, or a Data Agent on the Fabric Ontology.
 
 ## Gold Tables
 
-The following Gold-layer Delta tables are created by the Fabric notebooks
-and consumed by the Power BI reports and Data Agents:
+The following Gold-layer Delta tables are created by the Fabric notebooks and consumed by the Power BI reports and Data Agents:
 
 | Table | Grain | Purpose |
 |-------|-------|---------|
@@ -163,7 +271,8 @@ and consumed by the Power BI reports and Data Agents:
 | `gold_driver_monthly_features` | 1 row per driver per month | Monthly rollups of driving behavior for trend analysis |
 | `gold_policy_period_features` | 1 row per policy period | Pricing-ready feature snapshots aggregated across a policy term |
 | `gold_policy_period_loss` | 1 row per policy period | Actual claims count and payout per policy period |
-| `gold_expected_loss_scores` | 1 row per policy | Risk score and expected loss cost per policy |
+| **`gold_ml_training_data` 🆕** | **1 row per policy** | **ML training dataset with 8 features + 3 target variables** |
+| `gold_expected_loss_scores` | 1 row per policy | **ML-predicted** risk score and expected loss cost per policy |
 | `gold_policy_premium_recommendation` | 1 row per policy | Current vs recommended premium, change %, caps, smoothing |
 | `gold_premium_reason_codes` | N rows per policy | Top factors explaining each premium recommendation |
 
@@ -171,31 +280,21 @@ and consumed by the Power BI reports and Data Agents:
 
 ## Ontology Definition
 
-This repository includes a pre-built **Fabric Ontology** definition in the
-`ontology/` folder (`ont_UBI_definition.json`). The ontology defines entity
-types (Policyholder, Policy, Vehicle, Claim, Accident, Adjuster, etc.),
-their properties, data bindings to the Lakehouse Gold tables, and
-relationships between entities. Importing this ontology into your Fabric
-workspace enables rich semantic modelling and data agent capabilities.
+This repository includes a pre-built **Fabric Ontology** definition in the `ontology/` folder (`ont_UBI_definition.json`). The ontology defines entity types (Policyholder, Policy, Vehicle, Claim, Accident, Adjuster, etc.), their properties, data bindings to the Lakehouse Gold tables, and relationships between entities. Importing this ontology into your Fabric workspace enables rich semantic modelling and data agent capabilities.
 
 ### Importing the Ontology
 
-To import the ontology definition into your Microsoft Fabric workspace, use
-the **FabricIQ Export/Import Package** tool:
+To import the ontology definition into your Microsoft Fabric workspace, use the **FabricIQ Export/Import Package** tool:
 
 👉 **[FabricIQ Export/Import Package](https://github.com/sagarbathe/FabricIQ-export_import_package)**
 
 Follow the instructions in that repository to:
 
 1. Clone or download the [FabricIQ-export_import_package](https://github.com/sagarbathe/FabricIQ-export_import_package) repo.
-2. Use the **import** workflow to upload `ontology/ont_UBI_definition.json`
-   from this repository into your target Fabric workspace.
-3. The tool will create the ontology item in your workspace with all entity
-   types, property mappings, data bindings, and relationships pre-configured.
+2. Use the **import** workflow to upload `ontology/ont_UBI_definition.json` from this repository into your target Fabric workspace.
+3. The tool will create the ontology item in your workspace with all entity types, property mappings, data bindings, and relationships pre-configured.
 
-> **Note:** After importing, update the data binding workspace and lakehouse
-> IDs in the ontology to point to your own Fabric Lakehouse if they differ
-> from the exported values.
+> **Note:** After importing, update the data binding workspace and lakehouse IDs in the ontology to point to your own Fabric Lakehouse if they differ from the exported values.
 
 ---
 
@@ -205,29 +304,31 @@ Before setting up the solution, ensure you have:
 
 ### Azure & Fabric
 - An **Azure subscription** with permissions to create resources
-- A **Microsoft Fabric workspace** with an active **Fabric capacity**
-  (F2 or higher recommended; trial capacity works for evaluation)
+- A **Microsoft Fabric workspace** with an active **Fabric capacity** (F2 or higher recommended; trial capacity works for evaluation)
 - **Fabric workspace identity** enabled (Settings → Workspace identity)
 - **Azure CLI** installed ([install guide](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli))
 
+### Azure Machine Learning 🆕
+- **Azure ML workspace** created in your subscription
+- **Permissions**: AzureML Data Scientist or Contributor role
+- **Managed Identity**: Access granted to Azure ML workspace
+- **Azure ML Studio** access for running training notebooks
+
 ### Power BI
-- Power BI reports published to a workspace accessible by the
-  Container App Managed Identity
+- Power BI reports published to a workspace accessible by the Container App Managed Identity
 - Admin setting enabled: *"Service principals can use Power BI APIs"*
 
 ---
 
 ## Pre-Work: Setting Up the Fabric Environment
 
-Complete these steps in your Microsoft Fabric workspace **before** running
-the Streamlit app.
+Complete these steps in your Microsoft Fabric workspace **before** running the Streamlit app.
 
 ### Step 1 — Create a Lakehouse
 
 1. In the Fabric portal, navigate to your workspace.
 2. Create a new **Lakehouse** (e.g., `lh_AutoClaims`).
-3. Upload the source CSV files for the claims domain into the lakehouse
-   `Files/AutoClaims_csv/` folder:
+3. Upload the source CSV files for the claims domain into the lakehouse `Files/AutoClaims_csv/` folder:
    - `policyholder.csv`
    - `vehicle.csv`
    - `policy.csv`
@@ -237,413 +338,251 @@ the Streamlit app.
 
 ### Step 2 — Create Base Tables
 
-Open and run **`data/create auto claim tables.ipynb`** in a Fabric
-notebook environment. This notebook:
-- Drops and recreates the base relational tables (`Policyholder`,
-  `Vehicle`, `Policy`, `Adjuster`, `Accident`, `Claim`) in the
-  lakehouse.
+Open and run **`data/create auto claim tables.ipynb`** in a Fabric notebook environment. This notebook:
+- Drops and recreates the base relational tables (`Policyholder`, `Vehicle`, `Policy`, `Adjuster`, `Accident`, `Claim`) in the lakehouse.
 
 ### Step 3 — Load Data into Tables
 
 Open and run **`data/load auto claim tables.ipynb`**. This notebook:
 - Reads each CSV from `Files/AutoClaims_csv/`
-- Loads data into the corresponding lakehouse tables using schema
-  inference from the existing table structures.
+- Loads data into the corresponding lakehouse tables using schema validation.
 
-### Step 4 — Generate Driver Telemetry Data
+### Step 4 — Create Eventhouse & KQL Table
 
-#### Prerequisites for this step
+1. Create a new **Eventhouse** in your Fabric workspace (e.g., `eh_AutoClaims`).
+2. Open and run **`data/create driver telemetry data for eventhouse.ipynb`**. This notebook:
+   - Generates synthetic telematics data (trip-level driving behavior)
+   - Streams data to the Eventhouse KQL table `driver_telemetry_data`
 
-Before running the notebook, ensure the following are in place:
+### Step 5 — Create Gold Tables
 
-1. **Steps 1–3 completed** — The Lakehouse exists and the base tables
-   (including `policy`) are populated with data. The notebook reads
-   `policy.csv` from `Files/AutoClaims_csv/` to determine active
-   drivers and policy date ranges.
-2. **Fabric Eventhouse created** — Create an **Eventhouse** in your
-   Fabric workspace (e.g., `ev_driver_telemetry`) with a **database**
-   of the same name.
-3. **Eventhouse table created** — In the Eventhouse Query Editor, run
-   the `.create-merge table` KQL command (printed by the notebook) to
-   create the `driver_telemetry_data` table with the required schema.
-4. **Eventhouse connection URIs** — Obtain the **Query URI** and
-   **Ingest URI** for your Eventhouse. Update the following variables
-   in the notebook's configuration cell:
-   - `EVENTHOUSE_WORKSPACE` — your Fabric workspace name
-   - `EVENTHOUSE_NAME` — your Eventhouse name
-   - `EVENTHOUSE_DATABASE` — your database name
-   - `EVENTHOUSE_TABLE` — target table name (default:
-     `driver_telemetry_data`)
-   - `eventhouse_query_uri` — the Query URI
-     (e.g., `https://<cluster>.z3.kusto.fabric.microsoft.com`)
-   - `eventhouse_ingest_uri` — the Ingest URI
-     (e.g., `https://ingest-<cluster>.z3.kusto.fabric.microsoft.com`)
-5. **Permissions** — The workspace identity (or your user account) must
-   have **Admin** or **Contributor** role on the Eventhouse to write
-   data via the Kusto REST API.
+Open and run **`data/gold/nb_create_gold_tables.ipynb`** in Fabric. This notebook:
+- Joins telematics and policy data
+- Calculates trip-level features (speeding, harsh events, safety scores)
+- Aggregates to policy-period level
+- Creates gold tables for analysis
 
-**PS: This notebook can be run multiple times to add new driver telemetry data. The notebook is designed to add unique telemtry based on policy durations**
+---
 
-#### Running the notebook
+## Azure ML Setup
 
-Open and run **`data/create driver telemetry data for eventhouse.ipynb`**.
-This notebook:
-- Reads policy data to determine active drivers and date ranges.
-- Simulates realistic trip-level telemetry (speed, braking, acceleration,
-  cornering, safety scores) for each driver.
-- Authenticates using `mssparkutils.credentials.getToken()` and streams
-  batches to the Eventhouse via the Kusto REST API (MultiJSON format).
-- Also creates a `driver_telemetry_data` Delta table in the Lakehouse
-  for downstream Spark processing.
-- Prevents duplicate/overlapping trips by checking existing trip
-  timestamps before generating new ones. Safe to run multiple times.
+Follow these steps to set up the Azure ML model:
 
-### Step 5 — Build Gold Tables
+### Step 1 — Prepare Training Data
 
-Open and run **`data/nb_create_gold_tables.ipynb`**. This notebook:
-- Creates the seven Gold-layer Delta table schemas listed in the
-  [Gold Tables](#gold-tables) section.
-- Tables are created as empty Delta tables ready for population.
+**Run in Fabric**: [fabric_prep_training_data.ipynb](data/gold/fabric_prep_training_data.ipynb)
+- Combines features and historical outcomes
+- Engineers target variables
+- Exports training data as parquet
 
-### Step 6 — Score Policies & Compute Premiums
+### Step 2 — Train and Deploy Model
 
-Open and run **`data/nb_score_policies_compute_premium.ipynb`**. This
-notebook:
-- Reads raw tables (`driver_telemetry_data`, `policy`, `vehicle`,
-  `claim`, `accident`).
-- Computes `gold_trip_features`, `gold_driver_monthly_features`,
-  `gold_policy_period_features`, `gold_policy_period_loss`,
-  `gold_expected_loss_scores`, `gold_policy_premium_recommendation`,
-  and `gold_premium_reason_codes`.
-- Applies a rules-based risk model (`rules_v1`) with configurable
-  parameters: target loss ratio (65%), expense load (15%), profit load
-  (5%), max change cap (±15%), and smoothing (α = 0.3).
+**Run in Azure ML Studio**: [azureml_train_deploy_model.ipynb](data/gold/azureml_train_deploy_model.ipynb)
+- Upload training parquet from Fabric
+- Train multi-output regression model
+- Register model in Azure ML workspace
+- Create managed online endpoint
+- Deploy model and test
+- **Copy endpoint URL and primary key** for configuration
 
-### Step 7 — Publish Power BI Reports
+### Step 3 — Update Configuration
 
-Pre-built Power BI report files are included in the **`reports/`** folder:
+Edit **[deployment-config.ps1](deployment-config.ps1)** and add your Azure ML endpoint details:
 
-| File | Persona |
-|------|--------|
-| `Pricing Adequacy Dashboard.pbix` | Pricing / Actuarial |
+```powershell
+# Azure Machine Learning Configuration
+$AzureMLEndpointUrl = "https://your-endpoint.region.inference.ml.azure.com/score"
+$AzureMLEndpointKey = "your-primary-key-here"
+```
 
-To publish them to your Fabric workspace:
-
-1. Open each `.pbix` file in **Power BI Desktop**.
-2. Update the data source connection to point to your Fabric Lakehouse
-   Gold tables (Home → Transform data → Data source settings).
-3. Click **Publish** → select your Fabric workspace.
-4. After publishing, open the report in the Power BI service and note
-   the **Report ID** (from the URL: `reportId=<GUID>`) and the
-   **Workspace ID** / Group ID (from `groupId=<GUID>` or workspace
-   settings).
-5. Enter these values in `deployment-config.ps1` as `$PowerBiPricingReportId` and
-   `$PowerBiPricingGroupId`.
-
-### Step 7b — Create a Blank Report for Ad-hoc Explore
-
-The **Explore / Ad-hoc** view embeds a blank report in edit mode so users
-can build their own visuals on the fly. This requires a separate report
-linked to the same semantic model:
-
-1. In the Power BI Service, open your workspace.
-2. Find the **semantic model** used by the Pricing report.
-3. Click **…** → **Create report**.
-4. Immediately **save** it (without adding any visuals) — name it
-   something like "UBI Pricing Explore".
-5. Copy the **Report ID** from the URL and enter it in `deployment-config.ps1` as
-   `$PowerBiPricingExploreReportId`.
-
-> **Why a separate report?** DirectLake semantic models do not support
-> the `type: "create"` Power BI JS SDK embed because the service
-> principal cannot establish a new data source connection via SSO.
-> Embedding an existing (blank) report in edit mode re-uses the report
-> author's data connection and avoids this limitation.
-
-> **Tip:** If you build additional reports for other personas
-> (Underwriting, Agent/Advisor, Portfolio, Executive), save the `.pbix`
-> files into the `reports/` folder and follow the same publish workflow.
-
-### Step 8 — Import Fabric Ontology
-
-Import the pre-built UBI ontology definition into your Fabric workspace.
-See the [Ontology Definition](#ontology-definition) section for full
-instructions. In summary:
-
-1. Clone the [FabricIQ-export_import_package](https://github.com/sagarbathe/FabricIQ-export_import_package) repo.
-2. Use the **import** workflow to upload `ontology/ont_UBI_definition.json`
-   into your target Fabric workspace.
-3. After importing, update the data binding workspace and lakehouse IDs
-   to point to your own Fabric Lakehouse.
-
-### Step 9 — Create Fabric Data Agents
-
-You need to create **two** Fabric Data Agents in your workspace — one
-backed by the **Semantic Model** (Lakehouse & KQL tables; created in Step 7) and one backed by the **Fabric Ontology** (created in Step 8).
-
-> 📖 **Documentation:** For step-by-step guidance on creating data agents,
-> refer to
-> [How to create a Data Agent](https://learn.microsoft.com/en-us/fabric/data-science/how-to-create-data-agent).
-
-#### Agent 1 — Data Agent on Semantic Model (Lakehouse & KQL)
-
-1. In the Fabric portal, navigate to your workspace.
-2. Select **+ New item** → **Data Agent** (under Data Science).
-3. Give the agent a name (e.g., `da_UBI_SemanticModel`).
-4. Under data sources, add the **Semantic Model** that exposes your
-   Lakehouse Gold tables and Eventhouse KQL tables.
-5. Optionally add custom instructions to guide the agent on table
-   relationships and common query patterns.
-6. After creation, copy the **agent endpoint URL** from the agent
-   settings and set it as `$FabricPricingAgentEndpoint` in `deployment-config.ps1`.
-
-#### Agent 2 — Data Agent on Fabric Ontology
-
-1. In the Fabric portal, navigate to your workspace.
-2. Select **+ New item** → **Data Agent** (under Data Science).
-3. Give the agent a name (e.g., `da_UBI_Ontology`).
-4. Under data sources, add the **Fabric Ontology** you imported in
-   Step 8 (`ont_UBI_definition`).
-5. This agent leverages the ontology's entity types, relationships,
-   and semantic metadata for richer natural-language reasoning.
-6. After creation, copy the **agent endpoint URL** from the agent
-   settings and set it as `$FabricOntologyAgentEndpoint` in `deployment-config.ps1`.
+📖 **Detailed Instructions**: [Azure ML Integration Guide](data/gold/README_ML_MODEL.md)
 
 ---
 
 ## Application Setup
 
-### Deploy to Azure Container Apps
+### Step 1 — Clone Repository
 
-The app runs on **Azure Container Apps** using Docker containers.
-Authentication uses a **system-assigned Managed Identity** — no API keys
-or client secrets are needed.
-
-#### Quick deploy (PowerShell)
-
-1. Edit configuration in `deployment-config.ps1` (all IDs, endpoints, etc.)
-2. Run:
-
-```powershell
-az login
-.\deploy-containerapp.ps1
+```bash
+git clone https://github.com/sagarbathe/Usage-based-insurance-pricing-analytics-accelerator.git
+cd Usage-based-insurance-pricing-analytics-accelerator
 ```
 
-The script creates a resource group, Container Registry, Container Apps
-environment, builds a Docker image, deploys the container, and enables
-Managed Identity. On subsequent runs, it **updates** the existing app
-(preserving the managed identity).
-
-#### Manual deploy
-
-1. **Create Container Registry and Environment:**
-
-   ```powershell
-   az group create -n rg-ubi-pricing -l centralus
-   az acr create -n acrubipricingsagar -g rg-ubi-pricing --sku Basic --admin-enabled true
-   az containerapp env create -n env-ubi-pricing -g rg-ubi-pricing -l centralus
-   ```
-
-2. **Build and push Docker image:**
-
-   ```powershell
-   az acr build --registry acrubipricingsagar --image ubi-pricing-app:latest --file Dockerfile .
-   ```
-
-3. **Deploy Container App with Managed Identity:**
-
-   ```powershell
-   az containerapp create -n app-ubi-pricing -g rg-ubi-pricing `
-       --environment env-ubi-pricing `
-       --image acrubipricingsagar.azurecr.io/ubi-pricing-app:latest `
-       --registry-server acrubipricingsagar.azurecr.io `
-       --target-port 8000 --ingress external `
-       --system-assigned `
-       --cpu 1.0 --memory 2.0Gi `
-       --min-replicas 1 --max-replicas 3 `
-       --env-vars "FABRIC_WORKSPACE_ID=<YOUR_WORKSPACE_ID>" "AZURE_TENANT_ID=<YOUR_TENANT_ID>" ...
-   ```
-
-4. **Grant Managed Identity access:**
-   - In the **Power BI Admin Portal**, enable "Service principals can use Fabric public APIs"
-     for a security group containing the Container App's managed identity.
-   - In the **Power BI workspace**, grant the MI at least *Member* access
-     (required for DirectLake datasets).
-   - The MI automatically gets tokens for Power BI and Fabric Data Agent APIs.
-
-#### Environment Variables
-
-All sensitive values are read from environment variables at runtime.
-Edit `deployment-config.ps1` before deploying, or update the Container App
-environment variables later via:
+### Step 2 — Install Dependencies
 
 ```powershell
-az containerapp update -n app-ubi-pricing -g rg-ubi-pricing --set-env-vars "KEY=VALUE"
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 ```
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `FABRIC_WORKSPACE_ID` | Yes | Your Fabric workspace GUID |
-| `AZURE_TENANT_ID` | Yes | Your Azure AD tenant GUID |
-| `POWERBI_PRICING_REPORT_ID` | Yes | Pricing report GUID |
-| `POWERBI_PRICING_EXPLORE_REPORT_ID` | No | Blank report GUID for ad-hoc explore (see [Step 7b](#step-7b--create-a-blank-report-for-ad-hoc-explore)) |
-| `POWERBI_PRICING_GROUP_ID` | No | Defaults to `FABRIC_WORKSPACE_ID` |
-| `POWERBI_UNDERWRITING_REPORT_ID` | No | Underwriting report GUID |
-| `POWERBI_AGENT_REPORT_ID` | No | Agent/Advisor report GUID |
-| `POWERBI_PORTFOLIO_REPORT_ID` | No | Portfolio report GUID |
-| `POWERBI_EXECUTIVE_REPORT_ID` | No | Executive report GUID |
-| `FABRIC_PRICING_AGENT_ENDPOINT` | Yes | Full URL for the Pricing Data Agent |
-| `FABRIC_PRICING_ONTOLOGY_AGENT_ENDPOINT` | Yes | Full URL for the Ontology Data Agent |
-| `FABRIC_UNDERWRITING_AGENT_ENDPOINT` | No | Underwriting agent URL |
-| `FABRIC_AGENT_ADVISOR_ENDPOINT` | No | Agent/Advisor agent URL |
-| `FABRIC_PORTFOLIO_AGENT_ENDPOINT` | No | Portfolio agent URL |
-| `FABRIC_EXECUTIVE_AGENT_ENDPOINT` | No | Executive agent URL |
+### Step 3 — Configure Application
 
-### Dependencies
+Edit **[deployment-config.ps1](deployment-config.ps1)** with your environment details:
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `streamlit` | ≥ 1.30.0 | Web application framework |
-| `azure-identity` | ≥ 1.15.0 | Azure AD authentication (Managed Identity) |
-| `openai` | ≥ 1.70.0 | Fabric Data Agent communication (Assistants API) |
-| `plotly` | ≥ 5.18.0 | Interactive charts |
-| `pandas` | ≥ 2.0.0 | Data manipulation |
+```powershell
+# Fabric Workspace Configuration
+$FabricWorkspaceId = "your-workspace-id"
+$FabricLakehouseId = "your-lakehouse-id"
+$FabricEventhouseId = "your-eventhouse-id"
+
+# Power BI Configuration
+$PowerBIWorkspaceId = "your-powerbi-workspace-id"
+$PowerBIReportId = "your-report-id"
+
+# Azure ML Configuration (from Step 2 above)
+$AzureMLEndpointUrl = "your-endpoint-url"
+$AzureMLEndpointKey = "your-endpoint-key"
+```
 
 ---
 
 ## Configuration
 
-All configuration is done via **environment variables** in the Container App.
-Edit `deployment-config.ps1` before deploying, or update the Container App
-environment variables later via `az containerapp update --set-env-vars`.
+All configuration is managed through **[deployment-config.ps1](deployment-config.ps1)**. This file contains:
 
-### Power BI Reports
+- **Fabric settings**: Workspace IDs, Lakehouse IDs, Eventhouse IDs
+- **Power BI settings**: Workspace and report IDs
+- **Azure ML settings**: Endpoint URL, key, model name/version
+- **Container App settings**: Resource group, container registry, app name
 
-Set the report ID and group ID for each persona in `deployment-config.ps1`:
-
-```powershell
-$PowerBiPricingReportId = "<GUID>"
-$PowerBiPricingGroupId = "<GUID>"
-```
-
-### Fabric Data Agents
-
-Set the full endpoint URL for each Data Agent in `deployment-config.ps1`:
-
-```powershell
-$FabricPricingAgentEndpoint = "https://api.fabric.microsoft.com/v1/workspaces/<WS>/dataagents/<AGENT>/aiassistant/openai"
-$FabricOntologyAgentEndpoint = "https://api.fabric.microsoft.com/v1/workspaces/<WS>/dataagents/<AGENT>/aiassistant/openai"
-```
-
-### Authentication
-
-The app uses the **system-assigned Managed Identity** on the Azure App
-Service. No API keys, client secrets, or manual login is required.
+The deployment script automatically reads this configuration and sets environment variables for the Streamlit app.
 
 ---
 
 ## Running the Application
 
-After deploying (see [Deploy to Azure Container Apps](#deploy-to-azure-container-apps)),
-the app is available at the URL provided by the deployment script:
-```
-https://app-ubi-pricing.delightfulmushroom-<ID>.centralus.azurecontainerapps.io
+### Local Development
+
+```powershell
+streamlit run app.py
 ```
 
-The Docker container runs Streamlit on port 8000, which Container Apps
-proxies to HTTPS on port 443.
+### Deploy to Azure Container Apps
+
+```powershell
+# Login to Azure
+az login
+az account set --subscription "your-subscription-id"
+
+# Deploy container app
+.\deploy-containerapp.ps1
+```
+
+The deployment script will:
+1. Check if Azure ML model should be deployed
+2. Build and push Docker container
+3. Create/update Azure Container App
+4. Configure environment variables
+5. Grant managed identity access to Fabric and Azure ML
 
 ---
 
 ## Project Structure
 
 ```
-├── app.py                     # Main Streamlit entry point & persona router
-├── config.py                  # Power BI reports, Data Agent endpoints, persona definitions
-├── requirements.txt           # Python dependencies
-├── Dockerfile                 # Container image definition
-├── deployment-config.ps1      # Centralized configuration (edit this!)
-├── deploy-containerapp.ps1    # PowerShell deployment script for Container Apps
-├── README.md                  # This file
-│
-├── .streamlit/
-│   └── config.toml            # Streamlit server configuration
-│
-├── components/                # Reusable UI components
-│   ├── powerbi_auth.py        # Managed Identity token acquisition (view + edit embed tokens)
-│   ├── powerbi_embed.py       # Power BI JS SDK embed renderer (dashboard view + edit-mode explore)
-│   ├── data_agent_chat.py     # Fabric Data Agent chat panel (OpenAI Assistants API)
-│   └── kpi_tables.py          # KPI cards and data table components
-│
-├── pages/                     # Persona page modules
-│   ├── pricing.py             # Pricing / Actuarial
-│   ├── underwriting.py        # Underwriting
-│   ├── agent_advisor.py       # Agent / Advisor
-│   ├── portfolio.py           # Portfolio Manager
-│   └── executive.py           # Executive / Strategy
-│
-├── reports/                   # Power BI report files (.pbix)
-│   └── Pricing Adequacy Dashboard.pbix   # Pricing / Actuarial report
-│
-├── ontology/                  # Fabric Ontology definition
-│   └── ont_UBI_definition.json   # UBI domain ontology (entity types, bindings, relationships)
-│
-└── data/                      # Fabric notebooks & Gold table schemas
-    ├── csv/                                                # Source CSV data files
-    │   ├── accident.csv
-    │   ├── adjuster.csv
-    │   ├── claim.csv
-    │   ├── policy.csv
-    │   ├── policyholder.csv
-    │   └── vehicle.csv
-    ├── create auto claim tables.ipynb                      # Step 2: Create base tables
-    ├── load auto claim tables.ipynb                        # Step 3: Load CSV → tables
-    ├── create driver telemetry data for eventhouse.ipynb    # Step 4: Simulate telemetry
-    └── gold/
-        ├── README.txt                                      # Gold table export format guide
-        ├── nb_create_gold_tables.ipynb                     # Step 5: Create Gold schemas
-        ├── nb_create_scored_policy_period.ipynb             # Create scored policy period table
-        └── nb_score_policies_compute_premium.ipynb          # Step 6: Score & compute premiums
+├── app.py                              # Main Streamlit application
+├── config.py                           # Configuration loader
+├── deployment-config.ps1              # Centralized configuration
+├── deploy-containerapp.ps1            # Deployment automation
+├── Dockerfile                         # Container definition
+├── requirements.txt                   # Python dependencies
+├── pages/
+│   ├── pricing.py                    # Pricing persona page
+│   └── [other personas]              # Coming soon
+├── components/
+│   ├── powerbi_embed.py              # Power BI embedding
+│   ├── data_agent_chat.py            # Fabric Data Agent chat
+│   └── kpi_tables.py                 # KPI widgets
+├── data/
+│   ├── create auto claim tables.ipynb
+│   ├── load auto claim tables.ipynb
+│   ├── create driver telemetry data for eventhouse.ipynb
+│   └── gold/
+│       ├── fabric_prep_training_data.ipynb  🆕
+│       ├── azureml_train_deploy_model.ipynb 🆕
+│       ├── nb_create_gold_tables.ipynb
+│       ├── nb_score_policies_compute_premium.ipynb
+│       └── README_ML_MODEL.md
+├── ontology/
+│   └── ont_UBI_definition.json       # Fabric Ontology definition
+└── stats/
+    └── SUMMARY.md                     # Repository analytics
 ```
 
 ---
 
 ## Notebooks Reference
 
-| # | Notebook | Run In | Purpose |
-|---|----------|--------|---------|
-| 1 | `create auto claim tables.ipynb` | Fabric Spark | Creates base relational tables (Policyholder, Vehicle, Policy, Adjuster, Accident, Claim) |
-| 2 | `load auto claim tables.ipynb` | Fabric Spark | Loads CSV data into the base tables |
-| 3 | `create driver telemetry data for eventhouse.ipynb` | Fabric Spark | Generates simulated driver telemetry and streams to Eventhouse |
-| 4 | `gold/nb_create_gold_tables.ipynb` | Fabric Spark | Creates Gold-layer Delta table schemas |
-| 5 | `gold/nb_create_scored_policy_period.ipynb` | Fabric Spark | Creates scored policy period table |
-| 6 | `gold/nb_score_policies_compute_premium.ipynb` | Fabric Spark | Feature engineering, risk scoring, premium computation, reason codes |
-
-> **Important:** All notebooks must be run **in a Fabric Spark environment**
-> attached to your lakehouse. They use PySpark and `%%sql` magic commands.
-> Run them in sequence (1 → 6).
+| Notebook | Location | Purpose |
+|----------|----------|---------|
+| `create auto claim tables.ipynb` | `data/` | Create base lakehouse tables (Policy, Claim, Accident, etc.) |
+| `load auto claim tables.ipynb` | `data/` | Load CSV data into lakehouse tables |
+| `create driver telemetry data for eventhouse.ipynb` | `data/` | Generate and stream telematics data to KQL table |
+| **`fabric_prep_training_data.ipynb` 🆕** | `data/gold/` | **Prepare ML training data in Fabric** |
+| **`azureml_train_deploy_model.ipynb` 🆕** | `data/gold/` | **Train and deploy ML model in Azure ML** |
+| `nb_create_gold_tables.ipynb` | `data/gold/` | Create gold-layer feature tables |
+| `nb_score_policies_compute_premium.ipynb` | `data/gold/` | **Call Azure ML endpoint** and calculate premiums |
 
 ---
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|---------|
-| Power BI report shows sign-in prompt | Ensure `report_id` and `group_id` are set correctly in `deployment-config.ps1`. Verify the MI is enabled and has *Member* access on the workspace. |
-| "DirectLake not supported with V1 embed token" | The app uses V2 multi-resource `GenerateToken` API. Ensure the code is up to date — V1 per-report tokens do not support DirectLake datasets. |
-| Explore view: "Entra ID authentication failed" / data source credentials error | DirectLake requires the calling identity to resolve data connections. The Explore view uses a blank report in edit mode (not `type: "create"`) to avoid this. Ensure `POWERBI_PRICING_EXPLORE_REPORT_ID` is set and the MI has *Member* access. See [Step 7b](#step-7b--create-a-blank-report-for-ad-hoc-explore). |
-| Data Agent returns authentication error | Enable Managed Identity on the Container App and grant it access to Fabric. Add to security group `grp_spFabricAPIaccess` with tenant setting "Service principals can call Fabric public APIs" enabled. |
-| Data Agent placeholder message appears | Set the corresponding `FABRIC_*_AGENT_ENDPOINT` variable in `deployment-config.ps1`. |
-| Container App shows "Application Error" | Check logs: `az containerapp logs show -n app-ubi-pricing -g rg-ubi-pricing --tail 100`. Common causes: missing environment variables or incorrect Docker configuration. |
-| Container App returns 502 / timeout | Container may still be starting. Check logs and verify health probes are passing. |
-| Managed Identity token fails | Ensure system-assigned MI is enabled. Grant the MI *Member* on the Power BI workspace. Add MI to security group with "Service principals can call Fabric public APIs" enabled in Power BI Admin Portal. Wait 10-15 minutes for permissions to propagate. |
-| Notebooks fail with table-not-found | Run notebooks in order (1 → 6). Ensure the lakehouse is attached to the notebook. |
-| Missing CSV files error | Upload the source CSVs to `Files/AutoClaims_csv/` in your lakehouse before running `load auto claim tables.ipynb`. |
-| Docker build fails | Ensure `requirements.txt` is valid and all packages are compatible with Python 3.11. Check ACR build logs for specific errors. |
+### Azure ML Issues
+
+#### Error: "Endpoint not found"
+- ✅ Verify endpoint was created in Azure ML Studio
+- ✅ Check endpoint name in deployment-config.ps1 matches deployed endpoint
+- ✅ Ensure endpoint is in "Succeeded" state
+
+#### Error: "Unauthorized" or "403 Forbidden"
+- ✅ Run `az login` to authenticate
+- ✅ Grant managed identity "AzureML Data Scientist" role on workspace
+- ✅ Verify endpoint key is correct
+
+#### Error: "Model input schema mismatch"
+- ✅ Verify all 8 input features are present in request payload
+- ✅ Check feature names match exactly (case-sensitive)
+- ✅ Ensure all features are numeric (not strings)
+
+### Fabric Issues
+
+#### Error: "Table not found"
+- ✅ Run gold table creation notebooks in sequence
+- ✅ Verify lakehouse ID in configuration is correct
+
+#### Error: "Data Agent returns empty results"
+- ✅ Verify ontology is imported correctly
+- ✅ Check data agent has access to lakehouse
+- ✅ Ensure tables have data
+
+### Power BI Issues
+
+#### Error: "Report not found"
+- ✅ Verify report is published to specified workspace
+- ✅ Check Power BI workspace ID and report ID in config
+- ✅ Grant managed identity access to Power BI workspace
+
+📖 **More Troubleshooting**: [Azure ML Integration Guide - Troubleshooting Section](data/gold/README_ML_MODEL.md#troubleshooting)
 
 ---
 
+## Related Resources
+
+- **Original Fabric Accelerator**: [Usage-based-Pricing-Accelerator-Azure-apps](https://github.com/sagarbathe/Usage-based-Pricing-Accelerator-Azure-apps) (rules-based version)
+- **Fabric Ontology Tool**: [FabricIQ-export_import_package](https://github.com/sagarbathe/FabricIQ-export_import_package)
+- **Repository Analytics**: [capturerepostats](https://github.com/sagarbathe/capturerepostats)
+
+---
+
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request.
+
 ## License
 
-This project is provided as a reference solution for Usage-Based Insurance
-pricing on Microsoft Fabric. See the repository for license details.
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+---
+
+**Built with ❤️ using Microsoft Fabric, Azure Machine Learning, Power BI, and Streamlit**

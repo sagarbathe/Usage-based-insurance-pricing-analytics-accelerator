@@ -23,6 +23,20 @@ _WORKSPACE_ID = _env("FABRIC_WORKSPACE_ID", "<YOUR_WORKSPACE_ID>")
 _TENANT_ID = _env("AZURE_TENANT_ID", "<YOUR_TENANT_ID>")
 
 # ──────────────────────────────────────────────
+# Azure Machine Learning Configuration
+# Used by notebooks for ML-based risk scoring
+# ──────────────────────────────────────────────
+AZURE_ML_CONFIG = {
+    "subscription_id": _env("AZURE_ML_SUBSCRIPTION_ID", ""),
+    "resource_group": _env("AZURE_ML_RESOURCE_GROUP", ""),
+    "workspace_name": _env("AZURE_ML_WORKSPACE_NAME", ""),
+    "endpoint_name": _env("AZURE_ML_ENDPOINT_NAME", ""),
+    "deployment_name": _env("AZURE_ML_DEPLOYMENT_NAME", "") or None,
+    "model_name": _env("AZURE_ML_MODEL_NAME", "azure_ml_ubi_model"),
+    "model_version": _env("AZURE_ML_MODEL_VERSION", "1.0"),
+}
+
+# ──────────────────────────────────────────────
 # Power BI Embedded Reports
 # Override report_id per persona via env vars,
 # e.g. POWERBI_PRICING_REPORT_ID
