@@ -443,163 +443,68 @@ Open and run **`data/gold/nb_create_scored_policy_period.ipynb`** in Fabric. Thi
 
 ### Step 8 — Publish Power BI Report
 
-**Part A: Create Semantic Model**
+Pre-built Power BI report files are included in the reports/ folder:
 
-1. In your Fabric workspace, navigate to your Lakehouse (`lh_AutoClaims`)
-2. Click on the three dots (...) next to your lakehouse name
-3. Select **New semantic model**
-4. Select the tables you want to include:
-   - `gold_policy_period_features`
-   - `gold_expected_loss_scores`
-   - `gold_policy_premium_recommendation`
-   - `gold_policy_period_loss`
-   - `gold_premium_reason_codes`
-   - Base tables: `policy`, `policyholder`, `vehicle`, `claim`, `accident`
-5. Name it `UBI_Pricing_Model` and click **Create**
+File	Persona
+Pricing Adequacy Dashboard.pbix	Pricing / Actuarial
+To publish them to your Fabric workspace:
 
-**Part B: Define Relationships**
+Open each .pbix file in Power BI Desktop.
+Update the data source connection to point to your Fabric Lakehouse Gold tables (Home → Transform data → Data source settings).
+Click Publish → select your Fabric workspace.
+After publishing, open the report in the Power BI service and note the Report ID (from the URL: reportId=<GUID>) and the Workspace ID / Group ID (from groupId=<GUID> or workspace settings).
+Enter these values in deployment-config.ps1 as $PowerBiPricingReportId and $PowerBiPricingGroupId.
+Step 7b — Create a Blank Report for Ad-hoc Explore
+The Explore / Ad-hoc view embeds a blank report in edit mode so users can build their own visuals on the fly. This requires a separate report linked to the same semantic model:
 
-In the semantic model editor, create relationships:
+In the Power BI Service, open your workspace.
+Find the semantic model used by the Pricing report.
+Click … → Create report.
+Immediately save it (without adding any visuals) — name it something like "UBI Pricing Explore".
+Copy the Report ID from the URL and enter it in deployment-config.ps1 as $PowerBiPricingExploreReportId.
+Why a separate report? DirectLake semantic models do not support the type: "create" Power BI JS SDK embed because the service principal cannot establish a new data source connection via SSO. Embedding an existing (blank) report in edit mode re-uses the report author's data connection and avoids this limitation.
 
-- `gold_policy_period_features[policy_number]` → `gold_expected_loss_scores[policy_number]`
-- `gold_expected_loss_scores[policy_number]` → `gold_policy_premium_recommendation[policy_number]`
-- `gold_policy_premium_recommendation[policy_number]` → `gold_premium_reason_codes[policy_number]`
-- `gold_policy_period_features[policy_number]` → `policy[policy_number]`
-- `gold_policy_period_features[policyholder_id]` → `policyholder[policyholder_id]`
-- `gold_policy_period_features[vehicle_vin]` → `vehicle[vin]`
-- `gold_policy_period_loss[policy_number]` → `policy[policy_number]`
-- `claim[policy_number]` → `policy[policy_number]`
+Tip: If you build additional reports for other personas (Underwriting, Agent/Advisor, Portfolio, Executive), save the .pbix files into the reports/ folder and follow the same publish workflow.
 
-**Part C: Create Measures**
+### Step 9 — Import Fabric Ontology
+Import the pre-built UBI ontology definition into your Fabric workspace. See the Ontology Definition section for full instructions. In summary:
 
-Add key measures to the semantic model:
+Clone the FabricIQ-export_import_package repo.
+Use the import workflow to upload ontology/ont_UBI_definition.json into your target Fabric workspace.
+After importing, update the data binding workspace and lakehouse IDs to point to your own Fabric Lakehouse.
 
-```dax
-Loss Ratio = DIVIDE(SUM(gold_policy_period_loss[total_payout_amount]), SUM(gold_policy_premium_recommendation[recommended_premium]), 0)
+### Step 10 — Create Fabric Data Agents
 
-Avg Risk Score = AVERAGE(gold_expected_loss_scores[risk_score])
+You need to create **two** Fabric Data Agents in your workspace — one
+backed by the **Semantic Model** (Lakehouse & KQL tables; created in Step 7) and one backed by the **Fabric Ontology** (created in Step 8).
 
-Underpriced Policies = COUNTROWS(FILTER(gold_policy_premium_recommendation, gold_policy_premium_recommendation[underpriced_flag] = "Y"))
+> 📖 **Documentation:** For step-by-step guidance on creating data agents,
+> refer to
+> [How to create a Data Agent](https://learn.microsoft.com/en-us/fabric/data-science/how-to-create-data-agent).
 
-Total Policies = COUNTROWS(gold_policy_premium_recommendation)
+#### Agent 1 — Data Agent on Semantic Model (Lakehouse & KQL)
 
-Premium Gap = SUM(gold_policy_premium_recommendation[recommended_premium]) - SUM(gold_policy_premium_recommendation[current_premium])
-```
+1. In the Fabric portal, navigate to your workspace.
+2. Select **+ New item** → **Data Agent** (under Data Science).
+3. Give the agent a name (e.g., `da_UBI_SemanticModel`).
+4. Under data sources, add the **Semantic Model** that exposes your
+   Lakehouse Gold tables and Eventhouse KQL tables.
+5. Optionally add custom instructions to guide the agent on table
+   relationships and common query patterns.
+6. After creation, copy the **agent endpoint URL** from the agent
+   settings and set it as `$FabricPricingAgentEndpoint` in `deployment-config.ps1`.
 
-**Part D: Create Power BI Report**
+#### Agent 2 — Data Agent on Fabric Ontology
 
-1. Click **New report** from your semantic model
-2. Create visualizations for the Pricing/Actuarial persona:
-   - **KPI Cards**: Total Policies, Avg Loss Ratio, Avg Risk Score, Underpriced Policies %
-   - **Bar Chart**: Premium recommendations by coverage type
-   - **Scatter Plot**: Current Premium vs Recommended Premium (with underpriced flag as color)
-   - **Table**: Top 10 underpriced policies with reason codes
-   - **Line Chart**: Loss ratio trend by policy start date
-   - **Treemap**: Risk scores by vehicle make/model
-
-3. Apply filters and slicers:
-   - Coverage Type
-   - Risk Score Range
-   - Underpriced Flag
-   - Policy Start Date
-
-4. Save your report as `UBI_Pricing_Dashboard`
-
-**Part E: Publish Report**
-
-1. Click **File** → **Publish** → **Publish to Fabric**
-2. Select your workspace
-3. Once published, note down:
-   - **Workspace ID**: Found in workspace settings URL
-   - **Report ID**: Found in the report URL after `/reports/`
-
-**Part F: Configure Embedding**
-
-1. In Fabric, go to **Workspace settings** → **APIs**
-2. Enable **Service principals can use Fabric APIs**
-3. Add your Container App managed identity with **Viewer** role
-
-### Step 9 — Create Fabric Data Agents
-
-**Part A: Create Data Agent on Semantic Model**
-
-1. In your Fabric workspace, click **+ New** → **Data Agent**
-2. Name it `UBI_Pricing_Agent_SemanticModel`
-3. **Choose data source**: Select your semantic model `UBI_Pricing_Model`
-4. **Configure capabilities**:
-   - Enable **Natural language to SQL**
-   - Enable **Explain insights**
-   - Enable **Trend analysis**
-
-5. **Add instructions** to guide the agent:
-
-```
-You are a UBI pricing analytics assistant. Help users analyze policy pricing data, risk scores, and premium recommendations.
-
-Key metrics:
-- Risk Score: 0-100 scale (higher = riskier)
-- Expected Loss Cost: Predicted claim amount
-- Loss Ratio: Claims / Premium (target: 0.65)
-- Underpriced Flag: "Y" if policy needs premium increase
-
-When asked about underpriced policies, always show:
-- Policy number
-- Current vs Recommended premium
-- Risk score
-- Reason codes (speeding, harsh events, etc.)
-
-Format currency values with $ and 2 decimals.
-```
-
-6. Click **Create** and note the **Data Agent ID**
-
-**Part B: Create Data Agent on Ontology**
-
-1. Click **+ New** → **Data Agent**
-2. Name it `UBI_Pricing_Agent_Ontology`
-3. **Choose data source**: Select your imported ontology `UBI_Ontology`
-4. **Configure capabilities**:
-   - Enable **Entity relationship queries**
-   - Enable **Semantic reasoning**
-   - Enable **Cross-entity insights**
-
-5. **Add instructions**:
-
-```
-You are a UBI domain expert assistant. Use the ontology to provide contextual answers about policies, policyholders, vehicles, claims, and driving behavior.
-
-Explain relationships:
-- How trips connect to policies
-- How claims relate to risk factors
-- How vehicle characteristics impact pricing
-
-Provide business context for technical metrics.
-Use entity relationships to discover insights.
-```
-
-6. Click **Create** and note the **Data Agent ID**
-
-**Part C: Test Data Agents**
-
-Test queries for Semantic Model Agent:
-- "Which policies are underpriced?"
-- "What's the average risk score by coverage type?"
-- "Show me the top 10 policies with the highest recommended premium increase"
-
-Test queries for Ontology Agent:
-- "Explain how speeding impacts premium recommendations"
-- "What's the relationship between harsh braking and risk scores?"
-- "Which vehicle makes have the highest average risk scores?"
-
-**Part D: Update Configuration**
-
-Edit **[deployment-config.ps1](deployment-config.ps1)** with your IDs:
-
-```powershell
-# Fabric Data Agent Configuration
-$DataAgentSemanticModelId = "your-semantic-model-agent-id"
-$DataAgentOntologyId = "your-ontology-agent-id"
-```
+1. In the Fabric portal, navigate to your workspace.
+2. Select **+ New item** → **Data Agent** (under Data Science).
+3. Give the agent a name (e.g., `da_UBI_Ontology`).
+4. Under data sources, add the **Fabric Ontology** you imported in
+   Step 8 (`ont_UBI_definition`).
+5. This agent leverages the ontology's entity types, relationships,
+   and semantic metadata for richer natural-language reasoning.
+6. After creation, copy the **agent endpoint URL** from the agent
+   settings and set it as `$FabricOntologyAgentEndpoint` in `deployment-config.ps1`.
 
 ---
 
