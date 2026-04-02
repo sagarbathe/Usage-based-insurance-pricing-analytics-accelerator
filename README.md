@@ -363,6 +363,24 @@ Open and run **`data/gold/nb_create_gold_tables.ipynb`** in Fabric. This noteboo
 - Aggregates to policy-period level
 - Creates gold tables for analysis
 
+### Step 6 — Score Policies with Azure ML
+
+Open and run **`data/gold/nb_score_policies_compute_premium.ipynb`** in Fabric. This notebook:
+- Performs feature engineering on policy-period data
+- Calls the Azure ML real-time endpoint to get prediction metrics (risk_factor, expected_loss_cost, risk_score)
+- Calculates recommended premiums based on ML predictions
+- Applies business rules (target loss ratio, caps, smoothing)
+- Saves results to `gold_expected_loss_scores` and `gold_policy_premium_recommendation` tables
+
+> **Note:** This step requires the Azure ML endpoint to be deployed first (see Azure ML Setup section below).
+
+### Step 7 — Create Materialized Views for Ontology
+
+Open and run **`data/gold/nb_create_scored_policy_period.ipynb`** in Fabric. This notebook:
+- Creates materialized views on which the Fabric Ontology is built
+- Prepares data structures optimized for semantic querying
+- Enables rich data agent experiences with proper entity relationships
+
 ---
 
 ## Azure ML Setup
