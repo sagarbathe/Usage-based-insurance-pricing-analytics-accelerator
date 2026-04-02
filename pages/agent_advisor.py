@@ -21,33 +21,12 @@ def render() -> None:
     st.caption("Help me explain this premium to the customer.")
     st.divider()
 
-    # ── View mode management ──────────────────────────────
-    view_key = "agent_advisor_view_mode"
-    if view_key not in st.session_state:
-        st.session_state[view_key] = "both"
-
-    view_mode = st.session_state[view_key]
-
-    # ── View toggle toolbar ───────────────────────────────
-    tb = st.columns([1, 1, 1, 4])
-    with tb[0]:
-        if st.button("◻️ Split View", key="agent_advisor_split",
-                     disabled=(view_mode == "both"),
-                     use_container_width=True):
-            st.session_state[view_key] = "both"
-            st.rerun()
-    with tb[1]:
-        if st.button("📊 Expand Report", key="agent_advisor_expand_report",
-                     disabled=(view_mode == "report"),
-                     use_container_width=True):
-            st.session_state[view_key] = "report"
-            st.rerun()
-    with tb[2]:
-        if st.button("💬 Expand Agent", key="agent_advisor_expand_agent",
-                     disabled=(view_mode == "agent"),
-                     use_container_width=True):
-            st.session_state[view_key] = "agent"
-            st.rerun()
+    # ── Tabs for view navigation (preserves component state) ─────────────────────
+    tab1, tab2, tab3 = st.tabs([
+        "◻️ Split View",
+        "📊 Expand Report",
+        "💬 Expand Agent"
+    ])
 
     # ── Helper: render report content ─────────────────────
     def _render_report():
@@ -97,22 +76,16 @@ def render() -> None:
             suggested_prompts=agent["suggested_prompts"],
         )
 
-    # ── Layout based on view mode ─────────────────────────
-    if view_mode == "both":
+    # ── Layout with tabs ─────────────────────────
+    with tab1:  # Split View
         col_report, col_agent = st.columns([3, 2])
         with col_report:
             _render_report()
         with col_agent:
             _render_agent()
-    elif view_mode == "report":
+    
+    with tab2:  # Report Only
         _render_report()
-    elif view_mode == "agent":
+    
+    with tab3:  # Agent Only
         _render_agent()
-
-    # Chat input must be at root level (Streamlit restriction)
-    if view_mode in ("both", "agent"):
-        agent = DATA_AGENTS["agent_advisor"]
-        render_data_agent_chat_input(
-            agent_name=agent["name"],
-            endpoint=agent["endpoint"],
-        )

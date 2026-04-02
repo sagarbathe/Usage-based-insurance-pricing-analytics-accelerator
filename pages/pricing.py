@@ -25,43 +25,16 @@ def render() -> None:
     )
     st.divider()
 
-    # ── View selector ─────────────────────────────────────
-    view_key = "pricing_view_mode"
-    if view_key not in st.session_state:
-        st.session_state[view_key] = "dashboard"
-
-    cols = st.columns(4)
-    with cols[0]:
-        if st.button("📊 Power BI Dashboard", key="pricing_btn_dashboard",
-                     use_container_width=True,
-                     disabled=(st.session_state[view_key] == "dashboard")):
-            st.session_state[view_key] = "dashboard"
-            st.rerun()
-    with cols[1]:
-        if st.button("🔍 Explore / Ad-hoc", key="pricing_btn_explore",
-                     use_container_width=True,
-                     disabled=(st.session_state[view_key] == "explore")):
-            st.session_state[view_key] = "explore"
-            st.rerun()
-    with cols[2]:
-        if st.button("💬 Pricing Agent on Lakehouse and KQL", key="pricing_btn_agent_sm",
-                     use_container_width=True,
-                     disabled=(st.session_state[view_key] == "agent_semantic")):
-            st.session_state[view_key] = "agent_semantic"
-            st.rerun()
-    with cols[3]:
-        if st.button("🧠 Pricing Agent on FabricIQ Ontology", key="pricing_btn_agent_onto",
-                     use_container_width=True,
-                     disabled=(st.session_state[view_key] == "agent_ontology")):
-            st.session_state[view_key] = "agent_ontology"
-            st.rerun()
-
-    st.divider()
-
-    view_mode = st.session_state[view_key]
+    # ── Tabs for view navigation (preserves component state) ─────────────────────────────────────
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📊 Power BI Dashboard",
+        "🔍 Explore / Ad-hoc",
+        "💬 Pricing Agent on Lakehouse and KQL",
+        "🧠 Pricing Agent on FabricIQ Ontology"
+    ])
 
     # ── 1. Power BI Dashboard ─────────────────────────────
-    if view_mode == "dashboard":
+    with tab1:
         report = POWERBI_REPORTS["pricing"]
         render_powerbi_report(
             embed_url=report["embed_url"],
@@ -81,7 +54,7 @@ def render() -> None:
         )
 
     # ── 2. Explore / Ad-hoc Analysis ────────────────────
-    elif view_mode == "explore":
+    with tab2:
         report = POWERBI_REPORTS["pricing"]
         render_powerbi_explore(
             explore_report_id=report.get("explore_report_id", ""),
@@ -90,27 +63,19 @@ def render() -> None:
         )
 
     # ── 3. Pricing Agent on Semantic Model ────────────────
-    elif view_mode == "agent_semantic":
+    with tab3:
         agent = DATA_AGENTS["pricing"]
         render_data_agent_chat(
             agent_name=agent["name"],
             endpoint=agent["endpoint"],
             suggested_prompts=agent["suggested_prompts"],
         )
-        render_data_agent_chat_input(
-            agent_name=agent["name"],
-            endpoint=agent["endpoint"],
-        )
 
-    # ── 3. Pricing Agent on FabricIQ (Ontology) ──────────
-    elif view_mode == "agent_ontology":
+    # ── 4. Pricing Agent on FabricIQ (Ontology) ──────────
+    with tab4:
         agent = DATA_AGENTS["pricing_ontology"]
         render_data_agent_chat(
             agent_name=agent["name"],
             endpoint=agent["endpoint"],
             suggested_prompts=agent["suggested_prompts"],
-        )
-        render_data_agent_chat_input(
-            agent_name=agent["name"],
-            endpoint=agent["endpoint"],
         )
