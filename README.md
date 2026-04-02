@@ -348,12 +348,72 @@ Open and run **`data/load auto claim tables.ipynb`**. This notebook:
 - Reads each CSV from `Files/AutoClaims_csv/`
 - Loads data into the corresponding lakehouse tables using schema validation.
 
-### Step 4 — Create Eventhouse & KQL Table
+### Step 4 — Create Eventhouse & Generate Driver Telemetry Data
 
-1. Create a new **Eventhouse** in your Fabric workspace (e.g., `eh_AutoClaims`).
-2. Open and run **`data/create driver telemetry data for eventhouse.ipynb`**. This notebook:
-   - Generates synthetic telematics data (trip-level driving behavior)
-   - Streams data to the Eventhouse KQL table `driver_telemetry_data`
+**Part A: Create Eventhouse**
+
+1. In the Fabric portal, navigate to your workspace
+2. Click **+ New** → **More options** → **Real-Time Intelligence**
+3. Select **Eventhouse**
+4. Name it `eh_AutoClaims` and click **Create**
+5. Once created, the Eventhouse will have both a KQL Database and a KQL Queryset
+
+**Part B: Create KQL Table**
+
+1. In your Eventhouse, create a new KQL table named `driver_telemetry_data`
+2. The table schema will be defined by the following structure:
+
+```kql
+.create table driver_telemetry_data (
+    trip_id: string,
+    policyholder_id: string,
+    vin: string,
+    start_time: datetime,
+    end_time: datetime,
+    distance_miles: double,
+    speeding_incidents: int,
+    sudden_braking_count: int,
+    rapid_acceleration_count: int,
+    harsh_cornering_count: int,
+    safety_score: double,
+    time_of_day_category: string,
+    trip_risk_level: string
+)
+```
+
+**Part C: Generate and Stream Telemetry Data**
+
+Open and run **`data/create driver telemetry data for eventhouse.ipynb`** in a Fabric notebook. This notebook:
+
+1. **Generates synthetic telematics data** with realistic distributions:
+   - Creates 1000+ trip records per policy
+   - Simulates driving behavior (speeding, braking, acceleration, cornering)
+   - Calculates safety scores (0-100) based on behavior metrics
+   - Assigns time-of-day categories (Morning, Afternoon, Evening, Night)
+   - Determines trip risk levels (Low, Medium, High)
+
+2. **Enriches data with context**:
+   - Links trips to existing policyholders and vehicles
+   - Distributes trips across policy periods
+   - Generates realistic timestamps and durations
+
+3. **Streams data to KQL Eventhouse**:
+   - Uses Fabric's KQL endpoint for high-throughput ingestion
+   - Implements batching for efficient loading
+   - Validates data schema before streaming
+
+**Expected output**: 50,000+ trip records streamed to `driver_telemetry_data` KQL table
+
+**Verification**: Run this KQL query in your Eventhouse Queryset:
+
+```kql
+driver_telemetry_data
+| summarize 
+    TotalTrips = count(), 
+    AvgSafetyScore = avg(safety_score),
+    TotalMiles = sum(distance_miles)
+| project TotalTrips, AvgSafetyScore, TotalMiles
+```
 
 ### Step 5 — Create Gold Tables
 
@@ -380,6 +440,166 @@ Open and run **`data/gold/nb_create_scored_policy_period.ipynb`** in Fabric. Thi
 - Creates materialized views on which the Fabric Ontology is built
 - Prepares data structures optimized for semantic querying
 - Enables rich data agent experiences with proper entity relationships
+
+### Step 8 — Publish Power BI Report
+
+**Part A: Create Semantic Model**
+
+1. In your Fabric workspace, navigate to your Lakehouse (`lh_AutoClaims`)
+2. Click on the three dots (...) next to your lakehouse name
+3. Select **New semantic model**
+4. Select the tables you want to include:
+   - `gold_policy_period_features`
+   - `gold_expected_loss_scores`
+   - `gold_policy_premium_recommendation`
+   - `gold_policy_period_loss`
+   - `gold_premium_reason_codes`
+   - Base tables: `policy`, `policyholder`, `vehicle`, `claim`, `accident`
+5. Name it `UBI_Pricing_Model` and click **Create**
+
+**Part B: Define Relationships**
+
+In the semantic model editor, create relationships:
+
+- `gold_policy_period_features[policy_number]` → `gold_expected_loss_scores[policy_number]`
+- `gold_expected_loss_scores[policy_number]` → `gold_policy_premium_recommendation[policy_number]`
+- `gold_policy_premium_recommendation[policy_number]` → `gold_premium_reason_codes[policy_number]`
+- `gold_policy_period_features[policy_number]` → `policy[policy_number]`
+- `gold_policy_period_features[policyholder_id]` → `policyholder[policyholder_id]`
+- `gold_policy_period_features[vehicle_vin]` → `vehicle[vin]`
+- `gold_policy_period_loss[policy_number]` → `policy[policy_number]`
+- `claim[policy_number]` → `policy[policy_number]`
+
+**Part C: Create Measures**
+
+Add key measures to the semantic model:
+
+```dax
+Loss Ratio = DIVIDE(SUM(gold_policy_period_loss[total_payout_amount]), SUM(gold_policy_premium_recommendation[recommended_premium]), 0)
+
+Avg Risk Score = AVERAGE(gold_expected_loss_scores[risk_score])
+
+Underpriced Policies = COUNTROWS(FILTER(gold_policy_premium_recommendation, gold_policy_premium_recommendation[underpriced_flag] = "Y"))
+
+Total Policies = COUNTROWS(gold_policy_premium_recommendation)
+
+Premium Gap = SUM(gold_policy_premium_recommendation[recommended_premium]) - SUM(gold_policy_premium_recommendation[current_premium])
+```
+
+**Part D: Create Power BI Report**
+
+1. Click **New report** from your semantic model
+2. Create visualizations for the Pricing/Actuarial persona:
+   - **KPI Cards**: Total Policies, Avg Loss Ratio, Avg Risk Score, Underpriced Policies %
+   - **Bar Chart**: Premium recommendations by coverage type
+   - **Scatter Plot**: Current Premium vs Recommended Premium (with underpriced flag as color)
+   - **Table**: Top 10 underpriced policies with reason codes
+   - **Line Chart**: Loss ratio trend by policy start date
+   - **Treemap**: Risk scores by vehicle make/model
+
+3. Apply filters and slicers:
+   - Coverage Type
+   - Risk Score Range
+   - Underpriced Flag
+   - Policy Start Date
+
+4. Save your report as `UBI_Pricing_Dashboard`
+
+**Part E: Publish Report**
+
+1. Click **File** → **Publish** → **Publish to Fabric**
+2. Select your workspace
+3. Once published, note down:
+   - **Workspace ID**: Found in workspace settings URL
+   - **Report ID**: Found in the report URL after `/reports/`
+
+**Part F: Configure Embedding**
+
+1. In Fabric, go to **Workspace settings** → **APIs**
+2. Enable **Service principals can use Fabric APIs**
+3. Add your Container App managed identity with **Viewer** role
+
+### Step 9 — Create Fabric Data Agents
+
+**Part A: Create Data Agent on Semantic Model**
+
+1. In your Fabric workspace, click **+ New** → **Data Agent**
+2. Name it `UBI_Pricing_Agent_SemanticModel`
+3. **Choose data source**: Select your semantic model `UBI_Pricing_Model`
+4. **Configure capabilities**:
+   - Enable **Natural language to SQL**
+   - Enable **Explain insights**
+   - Enable **Trend analysis**
+
+5. **Add instructions** to guide the agent:
+
+```
+You are a UBI pricing analytics assistant. Help users analyze policy pricing data, risk scores, and premium recommendations.
+
+Key metrics:
+- Risk Score: 0-100 scale (higher = riskier)
+- Expected Loss Cost: Predicted claim amount
+- Loss Ratio: Claims / Premium (target: 0.65)
+- Underpriced Flag: "Y" if policy needs premium increase
+
+When asked about underpriced policies, always show:
+- Policy number
+- Current vs Recommended premium
+- Risk score
+- Reason codes (speeding, harsh events, etc.)
+
+Format currency values with $ and 2 decimals.
+```
+
+6. Click **Create** and note the **Data Agent ID**
+
+**Part B: Create Data Agent on Ontology**
+
+1. Click **+ New** → **Data Agent**
+2. Name it `UBI_Pricing_Agent_Ontology`
+3. **Choose data source**: Select your imported ontology `UBI_Ontology`
+4. **Configure capabilities**:
+   - Enable **Entity relationship queries**
+   - Enable **Semantic reasoning**
+   - Enable **Cross-entity insights**
+
+5. **Add instructions**:
+
+```
+You are a UBI domain expert assistant. Use the ontology to provide contextual answers about policies, policyholders, vehicles, claims, and driving behavior.
+
+Explain relationships:
+- How trips connect to policies
+- How claims relate to risk factors
+- How vehicle characteristics impact pricing
+
+Provide business context for technical metrics.
+Use entity relationships to discover insights.
+```
+
+6. Click **Create** and note the **Data Agent ID**
+
+**Part C: Test Data Agents**
+
+Test queries for Semantic Model Agent:
+- "Which policies are underpriced?"
+- "What's the average risk score by coverage type?"
+- "Show me the top 10 policies with the highest recommended premium increase"
+
+Test queries for Ontology Agent:
+- "Explain how speeding impacts premium recommendations"
+- "What's the relationship between harsh braking and risk scores?"
+- "Which vehicle makes have the highest average risk scores?"
+
+**Part D: Update Configuration**
+
+Edit **[deployment-config.ps1](deployment-config.ps1)** with your IDs:
+
+```powershell
+# Fabric Data Agent Configuration
+$DataAgentSemanticModelId = "your-semantic-model-agent-id"
+$DataAgentOntologyId = "your-ontology-agent-id"
+```
 
 ---
 
