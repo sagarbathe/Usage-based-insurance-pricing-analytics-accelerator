@@ -326,6 +326,18 @@ See: [Fabric Data Agent docs](https://learn.microsoft.com/en-us/fabric/data-scie
     thread_id_key = "_data_agent_session_id"
     if thread_id_key not in st.session_state:
         st.session_state[thread_id_key] = str(uuid.uuid4())
+    
+    # ── Check if ANY agent is processing (global lock with timeout) ──
+    # Clear stale locks (older than 5 minutes) - happens when page navigation interrupts processing
+    lock_timeout = 300  # 5 minutes in seconds
+    lock_timestamp = st.session_state.get("agent_processing_timestamp", 0)
+    if time.time() - lock_timestamp > lock_timeout:
+        st.session_state["agent_processing"] = False
+        st.session_state["processing_agent_name"] = ""
+        st.session_state["agent_processing_timestamp"] = 0
+    
+    is_processing = st.session_state.get("agent_processing", False)
+    processing_agent = st.session_state.get("processing_agent_name", "")
 
     # ── Layout: chat (left, wider) | suggested prompts (right) ──
     col_chat, col_prompts = st.columns([3, 1])
@@ -334,9 +346,28 @@ See: [Fabric Data Agent docs](https://learn.microsoft.com/en-us/fabric/data-scie
     selected_prompt = None
     with col_prompts:
         st.markdown("**💡 Suggested questions:**")
-        for i, prompt in enumerate(suggested_prompts):
-            if st.button(prompt, key=f"prompt_{agent_name}_{i}", use_container_width=True):
-                selected_prompt = prompt
+        if is_processing:
+            st.info(f"⏳ **{processing_agent}** is processing...")
+            # Show text placeholders instead of buttons when processing
+            for i, prompt in enumerate(suggested_prompts):
+                st.markdown(f"""
+                    <div style="
+                        padding: 0.5rem 1rem;
+                        border: 1px solid #ddd;
+                        border-radius: 0.5rem;
+                        text-align: center;
+                        background-color: #f0f0f0;
+                        color: #999;
+                        margin-bottom: 0.5rem;
+                        opacity: 0.5;
+                        cursor: not-allowed;
+                    ">{prompt}</div>
+                """, unsafe_allow_html=True)
+        else:
+            # Only render clickable buttons when NOT processing
+            for i, prompt in enumerate(suggested_prompts):
+                if st.button(prompt, key=f"prompt_{agent_name}_{i}", use_container_width=True):
+                    selected_prompt = prompt
 
     # ── Chat history (left column) ────────────────────────
     with col_chat:
@@ -345,19 +376,49 @@ See: [Fabric Data Agent docs](https://learn.microsoft.com/en-us/fabric/data-scie
             for msg in st.session_state[chat_key]:
                 with st.chat_message(msg["role"]):
                     st.markdown(msg["content"])
+        
+        # Chat input at the bottom of the column
+        user_input = st.chat_input(
+            f"Ask {agent_name}…" if not is_processing else f"🔒 {processing_agent} is processing...",
+            key=f"input_{agent_name.replace(' ', '_').lower()}",
+            disabled=is_processing,
+        )
+
+        if user_input:
+            # Double-check: if another agent started processing after input was submitted, ignore
+            if st.session_state.get("agent_processing", False):
+                st.warning(f"⏳ Please wait, **{st.session_state.get('processing_agent_name', 'another agent')}** is still processing...")
+            else:
+                # Set global processing lock IMMEDIATELY with timestamp
+                st.session_state["agent_processing"] = True
+                st.session_state["processing_agent_name"] = agent_name
+                st.session_state["agent_processing_timestamp"] = time.time()
+                
+                # Store pending query instead of processing immediately
+                pending_query_key = f"_pending_query_{agent_name.replace(' ', '_').lower()}"
+                st.session_state[pending_query_key] = user_input
+                
+                # Rerun to show updated UI with lock state
+                st.rerun()
 
     # Use suggested prompt if clicked
     if selected_prompt:
-        st.session_state[chat_key].append({"role": "user", "content": selected_prompt})
-
-        with st.spinner(f"{agent_name} is thinking…"):
-            # Create session-specific thread name for conversation persistence
-            # Each browser session gets its own thread, maintaining history within that session
-            session_id = st.session_state.get("_data_agent_session_id", str(uuid.uuid4()))
-            thread_name = f"{agent_name.replace(' ', '_').lower()}_session_{session_id}"
-            response = _call_data_agent(endpoint, selected_prompt, thread_name)
-
-        st.session_state[chat_key].append({"role": "assistant", "content": response})
+        # Double-check: if another agent started processing after button render, ignore
+        if st.session_state.get("agent_processing", False):
+            st.warning(f"⏳ Please wait, **{st.session_state.get('processing_agent_name', 'another agent')}** is still processing...")
+            return
+        
+        # Set global processing lock IMMEDIATELY with timestamp
+        st.session_state["agent_processing"] = True
+        st.session_state["processing_agent_name"] = agent_name
+        st.session_state["agent_processing_timestamp"] = time.time()
+        
+        # Store pending query instead of processing immediately
+        # This allows UI to update (show placeholders) before API call blocks
+        pending_query_key = f"_pending_query_{agent_name.replace(' ', '_').lower()}"
+        st.session_state[pending_query_key] = selected_prompt
+        
+        # Rerun to show updated UI with lock state
         st.rerun()
 
 
@@ -377,21 +438,98 @@ def render_data_agent_chat_input(agent_name: str, endpoint: str) -> None:
     thread_id_key = "_data_agent_session_id"
     if thread_id_key not in st.session_state:
         st.session_state[thread_id_key] = str(uuid.uuid4())
+    
+    # Check if any agent is processing (with timeout check)
+    lock_timeout = 300  # 5 minutes
+    lock_timestamp = st.session_state.get("agent_processing_timestamp", 0)
+    if time.time() - lock_timestamp > lock_timeout:
+        st.session_state["agent_processing"] = False
+        st.session_state["processing_agent_name"] = ""
+        st.session_state["agent_processing_timestamp"] = 0
+    
+    is_processing = st.session_state.get("agent_processing", False)
+    processing_agent = st.session_state.get("processing_agent_name", "")
 
     user_input = st.chat_input(
-        f"Ask {agent_name}…",
+        f"Ask {agent_name}…" if not is_processing else f"🔒 {processing_agent} is processing...",
         key=f"input_{agent_name.replace(' ', '_').lower()}",
+        disabled=is_processing,
     )
 
     if user_input:
-        st.session_state[chat_key].append({"role": "user", "content": user_input})
-
-        with st.spinner(f"{agent_name} is thinking…"):
-            # Create session-specific thread name for conversation persistence
-            # Each browser session gets its own thread, maintaining history within that session
-            session_id = st.session_state.get("_data_agent_session_id", str(uuid.uuid4()))
-            thread_name = f"{agent_name.replace(' ', '_').lower()}_session_{session_id}"
-            response = _call_data_agent(endpoint, user_input, thread_name)
-
-        st.session_state[chat_key].append({"role": "assistant", "content": response})
+        # Double-check: if another agent started processing after input was submitted, ignore
+        if st.session_state.get("agent_processing", False):
+            st.warning(f"⏳ Please wait, **{st.session_state.get('processing_agent_name', 'another agent')}** is still processing...")
+            return
+        
+        # Set global processing lock IMMEDIATELY with timestamp
+        st.session_state["agent_processing"] = True
+        st.session_state["processing_agent_name"] = agent_name
+        st.session_state["agent_processing_timestamp"] = time.time()
+        
+        # Store pending query instead of processing immediately
+        pending_query_key = f"_pending_query_{agent_name.replace(' ', '_').lower()}"
+        st.session_state[pending_query_key] = user_input
+        
+        # Rerun to show updated UI with lock state
         st.rerun()
+
+
+def process_pending_queries() -> None:
+    """
+    Process any pending data agent queries.
+    
+    MUST be called at the end of the page after all agents have rendered.
+    This ensures all agents show the locked state before any query processing begins.
+    """
+    # Check all possible agents for pending queries
+    for key in list(st.session_state.keys()):
+        if key.startswith("_pending_query_") and st.session_state.get(key):
+            # Extract agent name from key
+            agent_suffix = key.replace("_pending_query_", "")
+            
+            # Find the agent's details
+            chat_key = f"chat_history_{agent_suffix}"
+            pending_query = st.session_state[key]
+            st.session_state[key] = None  # Clear pending query
+            
+            # Get agent name from processing_agent_name (set when lock was created)
+            agent_name = st.session_state.get("processing_agent_name", "Agent")
+            
+            # Find endpoint by checking DATA_AGENTS config
+            from config import DATA_AGENTS
+            endpoint = None
+            for agent_config in DATA_AGENTS.values():
+                if agent_config["name"].replace(' ', '_').lower() == agent_suffix:
+                    endpoint = agent_config["endpoint"]
+                    break
+            
+            if not endpoint:
+                st.error(f"Could not find endpoint for agent: {agent_name}")
+                st.session_state["agent_processing"] = False
+                st.session_state["processing_agent_name"] = ""
+                st.session_state["agent_processing_timestamp"] = 0
+                st.rerun()
+                return
+            
+            # Process the query
+            st.session_state[chat_key].append({"role": "user", "content": pending_query})
+            
+            try:
+                with st.spinner(f"{agent_name} is thinking…"):
+                    session_id = st.session_state.get("_data_agent_session_id", str(uuid.uuid4()))
+                    thread_name = f"{agent_suffix}_session_{session_id}"
+                    response = _call_data_agent(endpoint, pending_query, thread_name)
+                
+                st.session_state[chat_key].append({"role": "assistant", "content": response})
+            except Exception as e:
+                st.session_state[chat_key].append({"role": "assistant", "content": f"❌ Error: {str(e)}"})
+            finally:
+                # Clear processing lock and timestamp
+                st.session_state["agent_processing"] = False
+                st.session_state["processing_agent_name"] = ""
+                st.session_state["agent_processing_timestamp"] = 0
+            
+            # Rerun to show results
+            st.rerun()
+            return  # Only process one at a time

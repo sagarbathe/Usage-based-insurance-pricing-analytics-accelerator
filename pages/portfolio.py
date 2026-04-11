@@ -11,7 +11,7 @@ import streamlit as st
 
 from config import POWERBI_REPORTS, DATA_AGENTS
 from components.powerbi_embed import render_powerbi_report
-from components.data_agent_chat import render_data_agent_chat, render_data_agent_chat_input
+from components.data_agent_chat import render_data_agent_chat, process_pending_queries
 
 
 def render() -> None:
@@ -81,3 +81,6 @@ def render() -> None:
     
     with tab3:  # Agent Only
         _render_agent()
+    
+    # Process any pending queries after all agents have rendered
+    process_pending_queries()

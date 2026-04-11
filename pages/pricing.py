@@ -13,7 +13,7 @@ import streamlit as st
 
 from config import POWERBI_REPORTS, DATA_AGENTS
 from components.powerbi_embed import render_powerbi_report, render_powerbi_explore
-from components.data_agent_chat import render_data_agent_chat, render_data_agent_chat_input
+from components.data_agent_chat import render_data_agent_chat, process_pending_queries
 
 
 def render() -> None:
@@ -79,3 +79,6 @@ def render() -> None:
             endpoint=agent["endpoint"],
             suggested_prompts=agent["suggested_prompts"],
         )
+    
+    # Process any pending queries after all agents have rendered
+    process_pending_queries()
