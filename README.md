@@ -562,22 +562,68 @@ pip install -r requirements.txt
 
 ### Step 3 — Configure Application
 
-Edit **[deployment-config.ps1](deployment-config.ps1)** with your environment details:
+Edit **[deployment-config.ps1](deployment-config.ps1)** — this is the single source of configuration consumed by both the deployment scripts and (via environment variables) the Streamlit app at runtime. Populate every variable below with values from your own Azure / Fabric / Power BI / Azure ML environment.
 
-```powershell
-# Fabric Workspace Configuration
-$FabricWorkspaceId = "your-workspace-id"
-$FabricLakehouseId = "your-lakehouse-id"
-$FabricEventhouseId = "your-eventhouse-id"
+#### Azure Infrastructure
 
-# Power BI Configuration
-$PowerBIWorkspaceId = "your-powerbi-workspace-id"
-$PowerBIReportId = "your-report-id"
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `$ResourceGroup` | Azure resource group for the app and Container App environment | `rg-ubi-pricing` |
+| `$Location` | Azure region | `centralus` |
+| `$AppServicePlan` | App Service Plan name (only if deploying to App Service) | `asp-ubi-pricing` |
+| `$AppName` | App Service / Container App name (must be globally unique) | `app-ubi-pricing` |
+| `$Sku` | App Service SKU (App Service deployments only) | `B1` |
+| `$PythonVersion` | Python runtime version | `3.11` |
 
-# Azure ML Configuration (from Step 2 above)
-$AzureMLEndpointUrl = "your-endpoint-url"
-$AzureMLEndpointKey = "your-endpoint-key"
-```
+#### Container Apps (used by `deploy-containerapp.ps1`)
+
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `$ContainerRegistry` | ACR name (globally unique, lowercase, no hyphens) | `acrubipricingsagar` |
+| `$ContainerAppEnv` | Container Apps Environment name | `env-ubi-pricing` |
+| `$ContainerAppName` | Container App name | `app-ubi-pricing` |
+| `$ImageName` | Image name pushed to ACR | `ubi-pricing-app` |
+| `$ImageTag` | Image tag | `latest` |
+
+#### Fabric & Power BI
+
+| Variable | Purpose |
+|----------|---------|
+| `$FabricWorkspaceId` | GUID of the Fabric workspace hosting the lakehouse, eventhouse and Data Agents |
+| `$AzureTenantId` | Microsoft Entra tenant ID used for OBO / MSAL sign-in |
+| `$PowerBiPricingReportId` | Embedded Power BI report ID for the Pricing persona |
+| `$PowerBiPricingExploreReportId` | Embedded report ID for the Pricing "Explore" tab |
+| `$PowerBiPricingGroupId` | Power BI workspace (group) ID (defaults to `$FabricWorkspaceId`) |
+| `$PowerBiUnderwritingReportId` | (Optional, currently unused) report ID for Underwriting persona |
+| `$PowerBiAgentReportId` | (Optional) report ID for Agent Advisor persona |
+| `$PowerBiPortfolioReportId` | (Optional) report ID for Portfolio persona |
+| `$PowerBiExecutiveReportId` | (Optional) report ID for Executive persona |
+| `$FabricPricingAgentEndpoint` | Full Fabric Data Agent URL ending in `/openai` for the Pricing Agent |
+| `$FabricOntologyAgentEndpoint` | Full Fabric Data Agent URL for the FabricIQ / Ontology agent |
+| `$FabricUnderwritingEndpoint` | (Optional) Data Agent URL for Underwriting |
+| `$FabricAgentAdvisorEndpoint` | (Optional) Data Agent URL for Agent Advisor |
+| `$FabricPortfolioEndpoint` | (Optional) Data Agent URL for Portfolio |
+| `$FabricExecutiveEndpoint` | (Optional) Data Agent URL for Executive |
+
+> Data Agent URL format: `https://api.fabric.microsoft.com/v1/workspaces/<workspaceId>/dataagents/<agentId>/aiassistant/openai`
+
+#### Azure Machine Learning
+
+Populate after running `data/gold/azureml_train_deploy_model.ipynb` (Steps 1–10).
+
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `$AzureMLSubscriptionId` | Subscription that hosts the Azure ML workspace | `04054f52-…` |
+| `$AzureMLResourceGroup` | Resource group for the Azure ML workspace | `RG_ML` |
+| `$AzureMLWorkspaceName` | Azure ML workspace name | `sbazureml` |
+| `$AzureMLModelName` | Registered model name | `azure_ml_ubi_model` |
+| `$AzureMLModelVersion` | Model version (bump after re-training) | `8` |
+| `$AzureMLEndpointName` | Online endpoint name | `ubi-risk-endpoint` |
+| `$AzureMLEndpointUrl` | **Required** scoring URL from Step 10 of the notebook | `https://<endpoint>.<region>.inference.ml.azure.com/score` |
+| `$AzureMLEndpointKey` | **Required** primary key from endpoint authentication | `AbC123…XYZ789` |
+| `$AzureMLDeploymentName` | Optional specific deployment (leave empty for default) | `""` |
+
+> ⚠️ Treat `$AzureMLEndpointKey` (and any embedded secrets) as sensitive. Do not commit real keys to a public repository — rotate the key and store it in Azure Key Vault or as a Container App secret for production.
 
 ---
 
