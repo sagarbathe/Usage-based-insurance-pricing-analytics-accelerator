@@ -58,20 +58,6 @@ POWERBI_REPORTS = {
         # Blank report on the same semantic model for ad-hoc explore
         "explore_report_id": _env("POWERBI_PRICING_EXPLORE_REPORT_ID", ""),
     },
-    "underwriting": {
-        "title": "UBI Underwriting Workbench",
-        "report_id": _env("POWERBI_UNDERWRITING_REPORT_ID", "<YOUR_UNDERWRITING_REPORT_ID>"),
-        "group_id": _env("POWERBI_UNDERWRITING_GROUP_ID", _WORKSPACE_ID),
-        "embed_url": (
-            f"https://app.powerbi.com/reportEmbed"
-            f"?reportId={_env('POWERBI_UNDERWRITING_REPORT_ID', '<YOUR_UNDERWRITING_REPORT_ID>')}"
-            f"&groupId={_env('POWERBI_UNDERWRITING_GROUP_ID', _WORKSPACE_ID)}"
-        ),
-        "description": (
-            "Driver behavior summary · Risk score trend · "
-            "Comparison vs similar drivers · Reason codes driving premium change"
-        ),
-    },
     "agent_advisor": {
         "title": "Customer Premium Explanation",
         "report_id": _env("POWERBI_AGENT_REPORT_ID", "<YOUR_AGENT_REPORT_ID>"),
@@ -147,18 +133,6 @@ DATA_AGENTS = {
             "List drivers with high severity accidents who were underpriced the following year",
         ],
     },
-    "underwriting": {
-        "name": "Underwriting Copilot",
-        "endpoint": _env(
-            "FABRIC_UNDERWRITING_AGENT_ENDPOINT",
-            "https://<YOUR_FABRIC_WORKSPACE>.fabric.microsoft.com/dataagent/underwriting-copilot",
-        ),
-        "suggested_prompts": [
-            "Explain this premium increase in plain English.",
-            "Which driving behaviors contributed most?",
-            "Compare this driver to similar drivers.",
-        ],
-    },
     "agent_advisor": {
         "name": "Agent Copilot",
         "endpoint": _env(
@@ -203,22 +177,12 @@ DATA_AGENTS = {
 PERSONAS = {
     "pricing": {
         "icon": "📐",
-        "title": "Pricing / Actuarial",
+        "title": "Pricing (Actuarial/Underwriting)",
         "purpose": "Are we pricing risk correctly, and will we hit our target loss ratio?",
         "gold_tables": [
             "gold_policy_premium_recommendation",
             "gold_expected_loss_scores",
             "gold_policy_period_loss",
-        ],
-    },
-    "underwriting": {
-        "icon": "⚖️",
-        "title": "Underwriting",
-        "purpose": "Why did this premium change, and is it defensible?",
-        "gold_tables": [
-            "gold_policy_period_features",
-            "gold_premium_reason_codes",
-            "gold_trip_features",
         ],
     },
     "agent_advisor": {

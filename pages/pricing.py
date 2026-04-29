@@ -1,5 +1,5 @@
 """
-📐 Pricing / Actuarial Persona Page
+📐 Pricing (Actuarial/Underwriting) Persona Page
 
 Purpose: "Are we pricing risk correctly, and will we hit our target loss ratio?"
 
@@ -17,9 +17,9 @@ from components.data_agent_chat import render_data_agent_chat, process_pending_q
 
 
 def render() -> None:
-    """Render the Pricing / Actuarial persona page."""
+    """Render the Pricing (Actuarial/Underwriting) persona page."""
 
-    st.header("📐 Pricing / Actuarial")
+    st.header("📐 Pricing (Actuarial/Underwriting)")
     st.caption(
         "Are we pricing risk correctly, and will we hit our target loss ratio?"
     )

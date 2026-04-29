@@ -398,11 +398,16 @@ See: [Fabric Data Agent docs](https://learn.microsoft.com/en-us/fabric/data-scie
                 st.session_state["agent_processing"] = True
                 st.session_state["processing_agent_name"] = agent_name
                 st.session_state["agent_processing_timestamp"] = time.time()
-                
+
+                # Append the user message to chat history right away so it is visible
+                # while the agent is processing (the answer is appended later by
+                # process_pending_queries()).
+                st.session_state[chat_key].append({"role": "user", "content": user_input})
+
                 # Store pending query instead of processing immediately
                 pending_query_key = f"_pending_query_{agent_name.replace(' ', '_').lower()}"
                 st.session_state[pending_query_key] = user_input
-                
+
                 # Rerun to show updated UI with lock state
                 st.rerun()
 
@@ -412,17 +417,21 @@ See: [Fabric Data Agent docs](https://learn.microsoft.com/en-us/fabric/data-scie
         if st.session_state.get("agent_processing", False):
             st.warning(f"⏳ Please wait, **{st.session_state.get('processing_agent_name', 'another agent')}** is still processing...")
             return
-        
+
         # Set global processing lock IMMEDIATELY with timestamp
         st.session_state["agent_processing"] = True
         st.session_state["processing_agent_name"] = agent_name
         st.session_state["agent_processing_timestamp"] = time.time()
-        
+
+        # Append the user message to chat history right away so it is visible
+        # while the agent is processing.
+        st.session_state[chat_key].append({"role": "user", "content": selected_prompt})
+
         # Store pending query instead of processing immediately
         # This allows UI to update (show placeholders) before API call blocks
         pending_query_key = f"_pending_query_{agent_name.replace(' ', '_').lower()}"
         st.session_state[pending_query_key] = selected_prompt
-        
+
         # Rerun to show updated UI with lock state
         st.rerun()
 
@@ -466,16 +475,20 @@ def render_data_agent_chat_input(agent_name: str, endpoint: str) -> None:
         if st.session_state.get("agent_processing", False):
             st.warning(f"⏳ Please wait, **{st.session_state.get('processing_agent_name', 'another agent')}** is still processing...")
             return
-        
+
         # Set global processing lock IMMEDIATELY with timestamp
         st.session_state["agent_processing"] = True
         st.session_state["processing_agent_name"] = agent_name
         st.session_state["agent_processing_timestamp"] = time.time()
-        
+
+        # Append the user message to chat history right away so it is visible
+        # while the agent is processing.
+        st.session_state[chat_key].append({"role": "user", "content": user_input})
+
         # Store pending query instead of processing immediately
         pending_query_key = f"_pending_query_{agent_name.replace(' ', '_').lower()}"
         st.session_state[pending_query_key] = user_input
-        
+
         # Rerun to show updated UI with lock state
         st.rerun()
 
@@ -518,8 +531,10 @@ def process_pending_queries() -> None:
                 return
             
             # Process the query
-            st.session_state[chat_key].append({"role": "user", "content": pending_query})
-            
+            # NOTE: the user message was already appended to chat history when the
+            # query was submitted, so it shows up while we are processing. Don't
+            # append it again here.
+
             try:
                 with st.spinner(f"{agent_name} is thinking…"):
                     session_id = st.session_state.get("_data_agent_session_id", str(uuid.uuid4()))
