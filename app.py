@@ -129,6 +129,15 @@ with st.sidebar:
     st.markdown("##### Intelligence App")
     st.markdown("---")
 
+    # ── Sign in (MSAL popup → user access token for OBO) ──
+    from components.fabric_obo_auth import render_signin_widget, get_signed_in_username
+
+    render_signin_widget()
+    _signed_in_user = get_signed_in_username()
+    if _signed_in_user:
+        st.success(f"Signed in: {_signed_in_user}")
+    st.markdown("---")
+
     st.markdown("### 🧭 Select Persona")
 
     persona_options = {

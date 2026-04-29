@@ -6,10 +6,15 @@ __pycache__
 *.so
 *.egg
 *.egg-info
+.venv
+venv
+env
 dist
 build
 .git
 .gitignore
+.github
+.streamlit
 .vscode
 .idea
 *.log

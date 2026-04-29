@@ -3,11 +3,19 @@ Fabric Data Agent Chat Component.
 
 Renders a persona-specific chat panel that connects to a
 Microsoft Fabric Data Agent using the OpenAI *Assistants* API
-(threads → messages → runs).  Authentication uses the App Service
-Managed Identity — no API keys needed.
+(threads → messages → runs).
+
+Authentication
+--------------
+Calls to Fabric are made **as the signed-in user** via the OAuth 2.0
+On-Behalf-Of flow. The user signs in through Container Apps Easy Auth;
+the forwarded user token is exchanged for a Fabric-audience token by
+``components.fabric_obo_auth``. Power BI embed tokens still use the
+Container App's Managed Identity (see ``components.powerbi_auth``).
 
 Reference:
   https://learn.microsoft.com/en-us/fabric/data-science/data-agent-end-to-end-tutorial
+  https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-on-behalf-of-flow
 """
 
 import time
@@ -18,19 +26,12 @@ import typing as t
 import requests
 import streamlit as st
 
-from components.powerbi_auth import _get_credential
-
-_FABRIC_SCOPE = "https://api.fabric.microsoft.com/.default"
+from components.fabric_obo_auth import get_fabric_bearer_token
 
 
-def _get_bearer_token() -> str | None:
-    """Return a bearer token for the Fabric Data Agent API, or None."""
-    try:
-        credential = _get_credential()
-        token = credential.get_token(_FABRIC_SCOPE)
-        return token.token
-    except Exception:
-        return None
+def _get_bearer_token() -> tuple[str | None, str]:
+    """Return (token, source_or_debug_reason)."""
+    return get_fabric_bearer_token()
 
 
 # ── OpenAI Assistants client wired to Fabric auth ────────────
@@ -45,7 +46,7 @@ def _build_openai_client(base_url: str):
     from openai._types import Omit
     from openai._utils import is_given
 
-    bearer = _get_bearer_token()
+    bearer, _src = _get_bearer_token()
     if bearer is None:
         return None
 
@@ -151,15 +152,19 @@ def _call_data_agent(endpoint: str, message: str, thread_name: str = None) -> st
     # Build OpenAI client
     client = _build_openai_client(endpoint.rstrip("/"))
     if client is None:
+        _t, reason = _get_bearer_token()
         return (
-            "⚠️ **Authentication failed** — could not obtain a token.\n\n"
-            "Ensure the App Service Managed Identity is enabled and has "
-            "access to Fabric."
+            "⚠️ **Authentication failed** — could not obtain a Fabric token "
+            "on behalf of the signed-in user.\n\n"
+            f"**Diagnostic:** `{reason}`\n\n"
+            "Ensure Easy Auth is enabled on the Container App and the OBO "
+            "app registration is configured (`OBO_CLIENT_ID`, "
+            "`OBO_CLIENT_SECRET`, `OBO_TENANT_ID`)."
         )
     
     try:
         # 1 ─ Get bearer token
-        bearer_token = _get_bearer_token()
+        bearer_token, _src = _get_bearer_token()
         if bearer_token is None:
             return "⚠️ **Authentication failed** — could not obtain a token."
         
