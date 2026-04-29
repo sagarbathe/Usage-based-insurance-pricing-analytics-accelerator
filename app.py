@@ -190,10 +190,6 @@ if selected_persona == "pricing":
     from pages.pricing import render
     render()
 
-elif selected_persona == "underwriting":
-    from pages.underwriting import render
-    render()
-
 elif selected_persona == "agent_advisor":
     from pages.agent_advisor import render
     render()
