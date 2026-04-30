@@ -27,7 +27,7 @@ $FabricWorkspaceId = "db7dcf85-001e-4277-a85e-3c92029900bc"
 $AzureTenantId     = "6d9c4b13-597a-4bd5-9af2-5987259103fd"
 
 # Power BI Report IDs
-$PowerBiPricingReportId         = "76cdd8e3-f32a-4de1-b167-74ef41440769"
+$PowerBiPricingReportId         = "33ff0809-24a1-47f0-ae96-e7e31286eae5"
 $PowerBiPricingExploreReportId  = "c663f8be-c2a6-4848-b771-5a7b37514ecd"
 $PowerBiPricingGroupId          = $FabricWorkspaceId
 $PowerBiUnderwritingReportId    = ""
