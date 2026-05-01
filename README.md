@@ -190,9 +190,10 @@ The Streamlit application provides an integrated experience with four interactiv
 
 ## UI Screenshot
 
-![alt text](image.png)
+<img width="1366" height="769" alt="image" src="https://github.com/user-attachments/assets/3ca6c17a-d211-4e74-bce1-4a7e894a5cea" />
 
-> **Note:** This version currently implements the **Pricing / Actuarial** persona only. Additional personas (Underwriting, Agent/Advisor, Portfolio Manager, Executive/Strategy) will be added in future releases.
+
+> **Note:** This version currently implements the **Pricing** persona only. Additional personas (Underwriting, Agent/Advisor, Portfolio Manager, Executive/Strategy) will be added in future releases.
 
 ---
 
