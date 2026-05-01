@@ -13,16 +13,6 @@ The accelerator helps insurers ensure premiums align with actual risk by enablin
 
 ---
 
-## 📊 Repository Analytics
-
-This repository tracks its own statistics automatically:
-- **Repository stats:** Views, clones, stars, forks → [stats/SUMMARY.md](stats/SUMMARY.md)
-- **Multi-repo analytics:** Track ALL your GitHub repositories → **[capturerepostats](https://github.com/sagarbathe/capturerepostats)**
-
-Stats are collected daily via GitHub Actions and generate automated reports.
-
----
-
 ## 🆕 What's New: Azure ML Integration
 
 **This accelerator extends the Fabric-only approach with Azure Machine Learning:**
